@@ -3,389 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Психометр v3</title>
+    <title>Психометр v4</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin:0; padding:0; box-sizing:border-box; }
         body {
-            background: #0a0a0f;
-            color: #e0e0e0;
-            font-family: 'Courier New', monospace;
-            min-height: 100vh;
-            overflow-x: hidden;
+            background:#0a0a0f; color:#e0e0e0;
+            font-family:'Courier New',monospace;
+            min-height:100vh; overflow-x:hidden;
         }
         .header {
-            background: #0f0f1a;
-            padding: 10px 16px;
-            border-bottom: 1px solid #1a1a2e;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            background:#0f0f1a; padding:10px 16px;
+            border-bottom:1px solid #1a1a2e;
+            display:flex; align-items:center; justify-content:space-between;
         }
-        .header h1 { font-size: 15px; color: #00ff88; letter-spacing: 2px; }
-        .status-dot {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: #333; transition: background 0.3s;
-        }
-        .status-dot.active    { background: #00ff88; animation: blink 1s infinite; }
-        .status-dot.measuring { background: #ff6600; animation: blink 0.8s infinite; }
-        .status-dot.error     { background: #ff3333; }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-        .roi-hint {
-            background: rgba(0,255,136,0.06);
-            border-bottom: 1px solid rgba(0,255,136,0.15);
-            padding: 5px 16px;
-            font-size: 11px;
-            color: rgba(0,255,136,0.6);
-            text-align: center;
-        }
+        .header h1 { font-size:15px; color:#00ff88; letter-spacing:2px; }
 
         .video-section {
-            position: relative;
-            width: 100%;
-            height: 150px;
-            background: #000;
-            overflow: hidden;
+            position:relative; width:100%; height:160px;
+            background:#000; overflow:hidden;
         }
-        #videoElement {
-            width: 100%; height: 150px;
-            object-fit: cover; display: block;
+        #videoEl {
+            width:100%; height:160px;
+            object-fit:cover; display:block;
         }
         #overlayCanvas {
-            position: absolute; top:0; left:0;
-            width: 100%; height: 150px;
-            pointer-events: none;
+            position:absolute; top:0; left:0;
+            width:100%; height:160px; pointer-events:none;
         }
-        #hiddenCanvas { display: none; }
-
-        .video-info {
-            position: absolute;
-            bottom: 3px; left: 8px; right: 8px;
-            display: flex; justify-content: space-between;
-            font-size: 10px; color: rgba(255,255,255,0.6);
-            background: rgba(0,0,0,0.4);
-            padding: 1px 6px; border-radius: 3px;
-        }
+        #hiddenCanvas { display:none; }
 
         .controls {
-            padding: 8px 16px;
-            display: flex; gap: 8px;
-            background: #0f0f1a;
-            border-bottom: 1px solid #1a1a2e;
+            padding:8px 16px; display:flex; gap:8px;
+            background:#0f0f1a; border-bottom:1px solid #1a1a2e;
         }
         button {
-            padding: 9px 10px;
-            border: 1px solid #333; border-radius: 6px;
-            background: #1a1a2e; color: #e0e0e0;
-            font-family: 'Courier New', monospace;
-            font-size: 12px; cursor: pointer;
-            flex: 1; transition: all 0.2s;
+            padding:9px 10px; border:1px solid #333;
+            border-radius:6px; background:#1a1a2e; color:#e0e0e0;
+            font-family:'Courier New',monospace; font-size:12px;
+            cursor:pointer; flex:1;
         }
-        button:active { transform: scale(0.97); }
-        button.primary { border-color: #00ff88; color: #00ff88; }
-        button.danger  { border-color: #ff3333; color: #ff3333; }
-        button:disabled { opacity: 0.4; }
+        button.primary { border-color:#00ff88; color:#00ff88; }
+        button.danger  { border-color:#ff3333; color:#ff3333; }
+        button:disabled { opacity:0.4; }
 
-        /* Диагностика сигнала */
-        .diag-row {
-            padding: 5px 16px;
-            background: #080810;
-            border-bottom: 1px solid #1a1a2e;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 4px;
-            font-size: 10px;
+        /* Статус — самое главное */
+        .status-banner {
+            padding:10px 16px;
+            font-size:13px; font-weight:bold;
+            text-align:center; letter-spacing:1px;
+            border-bottom:2px solid #1a1a2e;
+            transition: background 0.5s, color 0.5s;
         }
-        .diag-item { color: #555; }
-        .diag-item span { color: #888; }
-        .diag-item.good span { color: #00ff88; }
-        .diag-item.warn span { color: #ff9900; }
-        .diag-item.bad  span { color: #ff3333; }
+        .status-banner.waiting  { background:#0f0f1a; color:#555; }
+        .status-banner.calib    { background:#1a1400; color:#ff9900; }
+        .status-banner.weak     { background:#1a0a0a; color:#ff4444; }
+        .status-banner.unstable { background:#1a1000; color:#ff9900; }
+        .status-banner.valid    { background:#0a1a0a; color:#00ff88; }
 
-        .calib-section {
-            padding: 5px 16px;
-            font-size: 11px; color: #555;
-            background: #0f0f1a;
-            border-bottom: 1px solid #1a1a2e;
-            display: flex; align-items: center; gap: 10px;
+        /* Прогресс калибровки */
+        .calib-bar-wrap {
+            height:4px; background:#1a1a2e;
+            border-bottom:1px solid #111;
         }
-        .calibration-bar { flex:1; height:3px; background:#1a1a2e; border-radius:2px; overflow:hidden; }
-        .calibration-fill { height:100%; background:#00ff88; border-radius:2px; transition:width 0.3s; width:0%; }
+        .calib-bar-fill {
+            height:100%; background:#ff9900;
+            transition:width 0.3s; width:0%;
+        }
 
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px; background: #1a1a2e;
-            border-bottom: 1px solid #1a1a2e;
+        /* Диагностика — все числа видны */
+        .diag-grid {
+            display:grid; grid-template-columns:repeat(3,1fr);
+            gap:1px; background:#111;
+            border-bottom:1px solid #1a1a2e;
         }
-        .metric-card { background:#0f0f1a; padding:10px 8px; text-align:center; }
-        .metric-label { font-size:9px; color:#666; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
-        .metric-value { font-size:26px; font-weight:bold; color:#00ff88; line-height:1; transition:color 0.5s; }
-        .metric-value.warning { color:#ff9900; }
-        .metric-value.danger  { color:#ff3333; }
-        .metric-unit { font-size:10px; color:#555; margin-top:2px; }
+        .diag-cell {
+            background:#0c0c14; padding:8px 6px; text-align:center;
+        }
+        .diag-name { font-size:9px; color:#555; text-transform:uppercase; letter-spacing:1px; }
+        .diag-val  { font-size:16px; font-weight:bold; color:#888; margin-top:2px; }
+        .diag-val.green  { color:#00ff88; }
+        .diag-val.yellow { color:#ff9900; }
+        .diag-val.red    { color:#ff3333; }
+        .diag-sub  { font-size:9px; color:#444; margin-top:1px; }
 
-        .charts-section { padding: 10px 16px; }
-        .chart-container { margin-bottom: 12px; }
-        .chart-title {
-            font-size:10px; color:#666;
-            letter-spacing:1px; text-transform:uppercase;
-            margin-bottom:4px;
-            display:flex; justify-content:space-between; align-items:center;
+        /* Пульс — большой */
+        .hr-display {
+            padding:16px; text-align:center;
+            border-bottom:1px solid #1a1a2e;
+            background:#0f0f1a;
         }
-        .chart-title .val { color:#00ff88; font-size:11px; }
-        canvas.chart {
-            width:100%; height:70px;
-            border-radius:4px; background:#0f0f1a;
-            border:1px solid #1a1a2e; display:block;
+        .hr-number {
+            font-size:64px; font-weight:bold;
+            color:#555; line-height:1;
+            transition:color 0.5s;
         }
-        canvas.chart-tall { height:90px; }
+        .hr-number.valid   { color:#00ff88; }
+        .hr-number.warning { color:#ff9900; }
+        .hr-number.danger  { color:#ff3333; }
+        .hr-unit { font-size:14px; color:#444; margin-top:4px; }
+        .hr-confidence {
+            font-size:11px; color:#555; margin-top:6px;
+        }
 
-        .stress-section { padding: 0 16px 10px; }
-        .stress-box {
-            background:#0f0f1a; border:1px solid #1a1a2e;
-            border-radius:6px; padding:8px 12px;
-        }
-        .stress-head {
-            font-size:10px; color:#666;
+        /* Графики */
+        .charts { padding:10px 16px; }
+        .chart-wrap { margin-bottom:14px; }
+        .chart-label {
+            font-size:10px; color:#555;
             text-transform:uppercase; letter-spacing:1px;
-            margin-bottom:6px;
+            margin-bottom:4px;
             display:flex; justify-content:space-between;
         }
-        .stress-label { color:#00ff88; transition:color 0.5s; }
-        .stress-track { height:10px; background:#1a1a2e; border-radius:5px; overflow:hidden; }
-        .stress-fill {
-            height:100%; border-radius:5px;
-            background: linear-gradient(90deg,#00ff88,#ffff00,#ff6600,#ff3333);
-            background-size:400% 100%;
-            transition: width 1s ease; width:0%;
+        .chart-label span { color:#888; }
+        canvas.ch {
+            width:100%; height:70px; display:block;
+            background:#0c0c14; border:1px solid #1a1a2e;
+            border-radius:4px;
         }
+        canvas.ch-tall { height:90px; }
 
-        .triggers-section { padding: 0 16px 16px; }
-        .triggers-title { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; }
-        .trigger-log {
-            background:#0f0f1a; border:1px solid #1a1a2e;
+        /* Метрики HRV */
+        .hrv-grid {
+            display:grid; grid-template-columns:repeat(3,1fr);
+            gap:1px; background:#111;
+            border-top:1px solid #1a1a2e;
+            border-bottom:1px solid #1a1a2e;
+        }
+        .hrv-cell {
+            background:#0c0c14; padding:10px 8px; text-align:center;
+        }
+        .hrv-name { font-size:9px; color:#555; text-transform:uppercase; }
+        .hrv-val  { font-size:20px; font-weight:bold; color:#00ff88; margin-top:3px; }
+        .hrv-val.warn { color:#ff9900; }
+        .hrv-val.bad  { color:#ff3333; }
+        .hrv-unit { font-size:9px; color:#444; }
+
+        /* Лог */
+        .log-section { padding:10px 16px 20px; }
+        .log-title { font-size:10px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+        .log-box {
+            background:#0c0c14; border:1px solid #1a1a2e;
             border-radius:6px; padding:6px 8px;
-            max-height:100px; overflow-y:auto; font-size:11px;
+            max-height:120px; overflow-y:auto; font-size:11px;
         }
-        .trigger-item { padding:2px 0; border-bottom:1px solid #1a1a2e; display:flex; gap:8px; }
-        .trigger-item:last-child { border-bottom:none; }
-        .trigger-time { color:#555; min-width:42px; }
-        .trigger-msg        { color:#ff9900; }
-        .trigger-msg.info   { color:#00aaff; }
-        .trigger-msg.ok     { color:#00ff88; }
-        .trigger-msg.alert  { color:#ff3333; }
-
-        .sq { display:flex; align-items:center; gap:3px; }
-        .sq-bar { width:4px; border-radius:2px; background:#1a1a2e; transition:background 0.3s; }
-        .sq-bar.ok   { background:#00ff88; }
-        .sq-bar.warn { background:#ff9900; }
+        .log-row { padding:2px 0; border-bottom:1px solid #111; display:flex; gap:8px; }
+        .log-row:last-child { border:none; }
+        .log-time { color:#444; min-width:42px; }
+        .log-msg        { color:#888; }
+        .log-msg.ok     { color:#00ff88; }
+        .log-msg.warn   { color:#ff9900; }
+        .log-msg.alert  { color:#ff3333; }
+        .log-msg.info   { color:#4488ff; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>⚡ ПСИХОМЕТР v3</h1>
-    <div style="display:flex;align-items:center;gap:8px;">
-        <div class="sq" id="sqWrap">
-            <div class="sq-bar" id="sq1" style="height:6px"></div>
-            <div class="sq-bar" id="sq2" style="height:10px"></div>
-            <div class="sq-bar" id="sq3" style="height:14px"></div>
-            <div class="sq-bar" id="sq4" style="height:18px"></div>
-        </div>
-        <div class="status-dot" id="statusDot"></div>
-    </div>
+    <h1>⚡ ПСИХОМЕТР v4</h1>
+    <span id="fpsSpan" style="font-size:11px;color:#444;">FPS:--</span>
 </div>
 
-<div class="roi-hint">▲ совместите ЛОБ с рамкой ▲</div>
+<div style="padding:4px 16px;background:#080810;border-bottom:1px solid #111;
+            font-size:10px;color:rgba(0,255,136,0.5);text-align:center;">
+    ▲ совместите ЛОБ с рамкой ▲
+</div>
 
 <div class="video-section">
-    <video id="videoElement" autoplay playsinline muted></video>
+    <video id="videoEl" autoplay playsinline muted></video>
     <canvas id="overlayCanvas"></canvas>
     <canvas id="hiddenCanvas"></canvas>
-    <div class="video-info">
-        <span id="fpsLabel">FPS: --</span>
-        <span id="ampLabel">Амплитуда: --</span>
-        <span id="snrLabel">SNR: --</span>
-    </div>
 </div>
 
 <div class="controls">
     <button class="primary" id="btnStart" onclick="startCamera()">▶ Старт</button>
-    <button id="btnFlip"  onclick="flipCamera()" disabled>⟳ Камера</button>
+    <button id="btnFlip" onclick="flipCamera()" disabled>⟳ Камера</button>
     <button class="danger" id="btnStop" onclick="stopAll()" disabled>■ Стоп</button>
 </div>
 
-<!-- Диагностика -->
-<div class="diag-row" id="diagRow">
-    <div class="diag-item" id="diagFps">FPS <span>--</span></div>
-    <div class="diag-item" id="diagAmp">Ампл <span>--</span></div>
-    <div class="diag-item" id="diagPeaks">Пики <span>--</span></div>
+<!-- Статус — главный индикатор -->
+<div class="status-banner waiting" id="statusBanner">
+    ожидание запуска
+</div>
+<div class="calib-bar-wrap">
+    <div class="calib-bar-fill" id="calibFill"></div>
 </div>
 
-<div class="calib-section">
-    <span id="calibStatus">ожидание...</span>
-    <div class="calibration-bar"><div class="calibration-fill" id="calibBar"></div></div>
-</div>
-
-<div class="metrics-grid">
-    <div class="metric-card">
-        <div class="metric-label">Пульс</div>
-        <div class="metric-value" id="hrValue">--</div>
-        <div class="metric-unit">уд/мин</div>
+<!-- Диагностика сигнала -->
+<div class="diag-grid">
+    <div class="diag-cell">
+        <div class="diag-name">Амплитуда</div>
+        <div class="diag-val" id="dAmp">--</div>
+        <div class="diag-sub">мин &gt;0.010</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">RMSSD</div>
-        <div class="metric-value" id="rmssdValue">--</div>
-        <div class="metric-unit">мс HRV</div>
+    <div class="diag-cell">
+        <div class="diag-name">Регуляр.</div>
+        <div class="diag-val" id="dReg">--</div>
+        <div class="diag-sub">мин &gt;60%</div>
     </div>
-    <div class="metric-card">
-        <div class="metric-label">Стресс</div>
-        <div class="metric-value" id="stressValue">--</div>
-        <div class="metric-unit">индекс</div>
+    <div class="diag-cell">
+        <div class="diag-name">Пиков</div>
+        <div class="diag-val" id="dPeaks">--</div>
+        <div class="diag-sub">мин 5</div>
     </div>
 </div>
 
-<div class="charts-section">
-    <div class="chart-container">
-        <div class="chart-title">
-            Сырой зелёный канал
-            <span class="val" id="lblRaw">--</span>
+<!-- Пульс -->
+<div class="hr-display">
+    <div class="hr-number" id="hrNum">--</div>
+    <div class="hr-unit">ударов в минуту</div>
+    <div class="hr-confidence" id="hrConf">нет данных</div>
+</div>
+
+<!-- Графики -->
+<div class="charts">
+    <div class="chart-wrap">
+        <div class="chart-label">
+            Зелёный канал (сырой)
+            <span id="lblRaw">--</span>
         </div>
-        <canvas class="chart" id="chartRaw"></canvas>
+        <canvas class="ch" id="chRaw"></canvas>
     </div>
-    <div class="chart-container">
-        <div class="chart-title">
+    <div class="chart-wrap">
+        <div class="chart-label">
             После фильтрации + пики
-            <span class="val" id="lblFiltered">--</span>
+            <span id="lblFilt">--</span>
         </div>
-        <canvas class="chart" id="chartFiltered"></canvas>
+        <canvas class="ch" id="chFilt"></canvas>
     </div>
-    <div class="chart-container">
-        <div class="chart-title">
+    <div class="chart-wrap">
+        <div class="chart-label">
             Пульс (история)
-            <span class="val" id="lblHR">--</span>
+            <span id="lblHR">--</span>
         </div>
-        <canvas class="chart" id="chartHR"></canvas>
-    </div>
-    <div class="chart-container">
-        <div class="chart-title">
-            HRV — R-R интервалы
-            <span class="val" id="lblRR">--</span>
-        </div>
-        <canvas class="chart chart-tall" id="chartHRV"></canvas>
+        <canvas class="ch" id="chHR"></canvas>
     </div>
 </div>
 
-<div class="stress-section">
-    <div class="stress-box">
-        <div class="stress-head">
-            <span>Уровень стресса</span>
-            <span class="stress-label" id="stressLabel">Нет данных</span>
-        </div>
-        <div class="stress-track">
-            <div class="stress-fill" id="stressFill"></div>
-        </div>
+<!-- HRV метрики -->
+<div class="hrv-grid">
+    <div class="hrv-cell">
+        <div class="hrv-name">RMSSD</div>
+        <div class="hrv-val" id="hvRmssd">--</div>
+        <div class="hrv-unit">мс</div>
+    </div>
+    <div class="hrv-cell">
+        <div class="hrv-name">Стресс</div>
+        <div class="hrv-val" id="hvStress">--</div>
+        <div class="hrv-unit">индекс</div>
+    </div>
+    <div class="hrv-cell">
+        <div class="hrv-name">HRV тренд</div>
+        <div class="hrv-val" id="hvTrend">--</div>
+        <div class="hrv-unit"></div>
     </div>
 </div>
 
-<div class="triggers-section">
-    <div class="triggers-title">События</div>
-    <div class="trigger-log" id="triggerLog">
-        <div class="trigger-item">
-            <span class="trigger-time">--:--</span>
-            <span class="trigger-msg info">ℹ Ожидание запуска...</span>
+<!-- R-R график -->
+<div class="charts">
+    <div class="chart-wrap">
+        <div class="chart-label">
+            R-R интервалы (HRV)
+            <span id="lblRR">--</span>
+        </div>
+        <canvas class="ch ch-tall" id="chRR"></canvas>
+    </div>
+</div>
+
+<!-- Лог событий -->
+<div class="log-section">
+    <div class="log-title">Лог событий</div>
+    <div class="log-box" id="logBox">
+        <div class="log-row">
+            <span class="log-time">--:--</span>
+            <span class="log-msg info">Ожидание запуска...</span>
         </div>
     </div>
 </div>
 
 <script>
 // ================================================================
-//  ПСИХОМЕТР v3 — переработанный алгоритм
+//  ПСИХОМЕТР v4
 //
-//  Ключевые улучшения:
-//  1. Нормализация сигнала (detrending) перед фильтрацией
-//  2. Фильтр Баттерворта 2-го порядка вместо IIR 1-го
-//  3. Детекция пиков с адаптивным порогом (локальный максимум)
-//  4. Валидация R-R перед расчётом HR
-//  5. Диагностические метрики в реальном времени
-//  6. Показ и сырого, и фильтрованного сигнала
+//  Ключевое отличие от v3:
+//  ВАЛИДАЦИЯ — прежде чем показать пульс, проверяем:
+//  1. Амплитуда сигнала выше порога шума
+//  2. Пики распределены РЕГУЛЯРНО (CV R-R < порога)
+//  3. Найдено достаточно пиков (минимум 5)
+//  4. Частота пиков в физиологическом диапазоне
+//
+//  Если хоть одно условие не выполнено — показываем "--"
+//  и объясняем ПОЧЕМУ.
 // ================================================================
 
-// ── Константы ───────────────────────────────────────────────────
 const CFG = {
     // ROI
-    ROI_W:      0.44,   // ширина ROI как доля кадра
-    ROI_H:      0.30,   // высота ROI
-    ROI_Y:      0.05,   // отступ сверху
+    ROI_W: 0.44,
+    ROI_H: 0.30,
+    ROI_Y: 0.05,
 
-    // Буфер
-    BUF_SIZE:   512,    // сэмплов (~17 сек при 30fps)
+    // Буфер: 10 секунд при 30fps
+    BUF_SEC:  10,
 
-    // Фильтр (пульс 40-180 уд/мин = 0.67-3.0 Гц)
-    BP_LOW:     0.67,
-    BP_HIGH:    3.0,
+    // Фильтр (42-180 уд/мин)
+    BP_LO: 0.7,
+    BP_HI: 3.0,
 
     // Калибровка
-    CALIB_SEC:  5,      // секунд
+    CALIB_SEC: 5,
 
     // Детекция пиков
-    PEAK_MIN_DIST_SEC: 0.33,  // мин расстояние между пиками (180 уд/мин)
-    PEAK_THRESHOLD:    0.4,   // доля от макс амплитуды
+    PEAK_MIN_SEC: 0.33,  // мин расстояние (180 уд/мин)
 
-    // Валидация R-R
-    RR_MIN:     333,    // мс (180 уд/мин)
-    RR_MAX:     1500,   // мс (40  уд/мин)
-    RR_OUTLIER: 0.30,   // ±30% от медианы — выброс
+    // Валидация — ГЛАВНОЕ
+    MIN_AMPLITUDE:  0.008,  // минимальная амплитуда сигнала
+    MIN_PEAKS:      5,      // минимум пиков для расчёта
+    MAX_RR_CV:      0.25,   // макс коэф. вариации R-R (регулярность)
+                            // CV = std/mean; <0.25 = регулярный пульс
+    RR_MIN_MS:      350,    // мс (171 уд/мин)
+    RR_MAX_MS:      1500,   // мс (40  уд/мин)
 
-    // Сглаживание HR
-    HR_SMOOTH:  6,      // размер окна скользящего среднего
-    HR_MAX_JUMP:6,      // макс прыжок за итерацию (уд/мин)
+    // Сглаживание (только если сигнал валиден несколько раз подряд)
+    VALID_STREAK:   3,      // подряд валидных измерений перед показом
+    HR_SMOOTH_WIN:  5,
 
-    // Антиспам триггеров
-    TRIGGER_CD: 15000,
+    TRIGGER_CD: 20000,
 };
 
-// ── Состояние ───────────────────────────────────────────────────
+// ── Состояние ────────────────────────────────────────────────────
 const S = {
-    stream:      null,
-    facing:      'user',
-    running:     false,
+    stream: null, facing: 'user', running: false,
 
-    // Временные ряды
-    rawG:        [],    // сырой зелёный канал
-    times:       [],    // timestamp каждого сэмпла
+    // Буферы
+    rawG: [], times: [],
 
-    // Обработанный сигнал
-    detrended:   [],
-    filtered:    [],
-
-    // Пики и интервалы
-    peaks:       [],
-    rr:          [],    // все R-R
-    rrClean:     [],    // после фильтрации выбросов
+    // DSP результаты
+    filtered: [], peaks: [], rr: [], rrClean: [],
 
     // Метрики
-    fps:         0,
-    amplitude:   0,
-    snr:         0,
-    hr:          0,
-    hrHistory:   [],
-    hrBuf:       [],    // для сглаживания
-    rmssd:       0,
-    stress:      0,
-    quality:     0,     // 0-4
+    fps: 0, amplitude: 0, rrCV: 0,
+    hr: 0, hrBuf: [], hrHistory: [],
+    rmssd: 0, stress: 0,
+
+    // Валидация
+    isValid: false,
+    validStreak: 0,      // сколько подряд валидных измерений
+    invalidReason: '',   // почему не валиден
 
     // Калибровка
-    calibDone:   false,
-    calibStart:  0,
+    calibDone: false, calibStart: 0,
 
     // Счётчики
-    frameN:      0,
-    fpsCounter:  0,
-    fpsTimer:    0,
-
-    lastTriggers:{},
+    frameN: 0, fpsCount: 0, fpsTimer: 0,
+    lastTriggers: {},
 };
 
 // ================================================================
@@ -394,17 +363,15 @@ const S = {
 async function startCamera() {
     try {
         if (S.stream) S.stream.getTracks().forEach(t => t.stop());
-
         S.stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 facingMode: S.facing,
-                width:     { ideal: 640 },
-                height:    { ideal: 480 },
+                width:  { ideal: 640 },
+                height: { ideal: 480 },
                 frameRate: { ideal: 30, min: 15 },
             }
         });
-
-        const v = document.getElementById('videoElement');
+        const v = document.getElementById('videoEl');
         v.srcObject = S.stream;
         await new Promise(r => v.onloadedmetadata = r);
         await v.play();
@@ -413,32 +380,29 @@ async function startCamera() {
         document.getElementById('btnFlip').disabled  = false;
         document.getElementById('btnStop').disabled  = false;
 
-        setDot('active');
-        addLog('info', 'Камера запущена');
+        log('info', 'Камера запущена');
         startLoop();
 
     } catch(e) {
-        addLog('alert', 'Камера: ' + e.message);
-        setDot('error');
+        log('alert', 'Камера: ' + e.message);
     }
 }
 
 function flipCamera() {
     S.facing = S.facing === 'user' ? 'environment' : 'user';
-    addLog('info', S.facing === 'user' ? 'Передняя камера' : 'Задняя камера');
     stopAll(false);
     startCamera();
 }
 
 function stopAll(resetUI = true) {
     S.running = false;
-    if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+    if (S.stream) { S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; }
     if (resetUI) {
         document.getElementById('btnStart').disabled = false;
         document.getElementById('btnFlip').disabled  = true;
         document.getElementById('btnStop').disabled  = true;
-        setDot('');
-        addLog('info', 'Остановлено');
+        setBanner('waiting', 'остановлено');
+        log('info', 'Остановлено');
     }
 }
 
@@ -446,438 +410,493 @@ function stopAll(resetUI = true) {
 //  ГЛАВНЫЙ ЦИКЛ
 // ================================================================
 function startLoop() {
-    // Сбрасываем состояние
     Object.assign(S, {
-        rawG:[], times:[], detrended:[], filtered:[],
-        peaks:[], rr:[], rrClean:[],
-        fps:0, amplitude:0, snr:0,
-        hr:0, hrHistory:[], hrBuf:[], rmssd:0, stress:0, quality:0,
+        rawG:[], times:[], filtered:[], peaks:[], rr:[], rrClean:[],
+        fps:0, amplitude:0, rrCV:0,
+        hr:0, hrBuf:[], hrHistory:[],
+        rmssd:0, stress:0,
+        isValid:false, validStreak:0, invalidReason:'',
         calibDone:false, calibStart:performance.now(),
-        frameN:0, fpsCounter:0, fpsTimer:performance.now(),
+        frameN:0, fpsCount:0, fpsTimer:performance.now(),
     });
-    updateCalib(0);
+
+    setBanner('calib', 'калибровка — держите лоб в рамке');
+    document.getElementById('calibFill').style.background = '#ff9900';
     S.running = true;
-    requestAnimationFrame(loop);
-    addLog('info', 'Держите лоб в рамке, не двигайтесь');
+    requestAnimationFrame(mainLoop);
 }
 
-function loop(ts) {
+function mainLoop(ts) {
     if (!S.running) return;
 
-    const video = document.getElementById('videoElement');
-    if (video.readyState < 2) { requestAnimationFrame(loop); return; }
+    const video = document.getElementById('videoEl');
+    if (video.readyState < 2) { requestAnimationFrame(mainLoop); return; }
 
-    // ── FPS ─────────────────────────────────────────────────────
-    S.fpsCounter++;
+    // FPS
+    S.fpsCount++;
     if (ts - S.fpsTimer >= 1000) {
-        S.fps = S.fpsCounter;
-        S.fpsCounter = 0;
+        S.fps = S.fpsCount;
+        S.fpsCount = 0;
         S.fpsTimer = ts;
-        document.getElementById('fpsLabel').textContent = `FPS: ${S.fps}`;
+        document.getElementById('fpsSpan').textContent = `FPS:${S.fps}`;
     }
 
-    // ── Захват кадра ────────────────────────────────────────────
+    // Захват
     const hc  = document.getElementById('hiddenCanvas');
     const ctx = hc.getContext('2d', { willReadFrequently: true });
     const vw  = video.videoWidth  || 320;
     const vh  = video.videoHeight || 240;
-    hc.width  = vw;
-    hc.height = vh;
+    hc.width=vw; hc.height=vh;
     ctx.drawImage(video, 0, 0, vw, vh);
 
-    // ── ROI ─────────────────────────────────────────────────────
     const roi = makeROI(vw, vh);
+    const { g, lum } = extractG(ctx, roi);
 
-    // ── Извлечение каналов ──────────────────────────────────────
-    const { r, g, b } = extractChannels(ctx, roi);
+    // Защита: слишком тёмно или слишком светло
+    if (lum < 20 || lum > 240) {
+        requestAnimationFrame(mainLoop);
+        return;
+    }
 
-    // Нормализованный зелёный (POS-lite: G/((R+G+B)/3))
-    const lum = (r + g + b) / 3;
-    const gNorm = lum > 5 ? g / lum : (S.rawG.length ? S.rawG[S.rawG.length-1] : 1.0);
+    // Нормализованный G
+    const gn = g / lum;
 
-    S.rawG.push(gNorm);
+    S.rawG.push(gn);
     S.times.push(ts);
 
-    // Ограничиваем буфер
-    if (S.rawG.length > CFG.BUF_SIZE) {
+    // Размер буфера
+    const maxBuf = Math.round((S.fps || 30) * CFG.BUF_SEC);
+    if (S.rawG.length > maxBuf) {
         S.rawG.shift();
         S.times.shift();
     }
 
-    // ── Калибровка ──────────────────────────────────────────────
+    // Калибровка
     const elapsed = (ts - S.calibStart) / 1000;
     const calibP  = Math.min(elapsed / CFG.CALIB_SEC, 1);
-    updateCalib(calibP);
+    document.getElementById('calibFill').style.width = (calibP * 100) + '%';
 
     if (!S.calibDone && calibP >= 1) {
         S.calibDone = true;
-        setDot('measuring');
-        addLog('ok', 'Калибровка завершена');
+        document.getElementById('calibFill').style.background = '#00ff88';
+        log('ok', 'Калибровка завершена, начинаю анализ');
     }
 
-    // ── Рамка ───────────────────────────────────────────────────
     drawOverlay(roi, vw, vh);
 
-    // ── Анализ (каждые 10 кадров) ───────────────────────────────
+    // Анализ каждые 10 кадров
     S.frameN++;
     if (S.calibDone && S.frameN % 10 === 0) {
         analyze();
     }
 
-    // ── Сырой график всегда ─────────────────────────────────────
-    drawRaw();
-
-    requestAnimationFrame(loop);
+    drawRawChart();
+    requestAnimationFrame(mainLoop);
 }
 
 // ================================================================
-//  ROI
+//  ROI и ЗАХВАТ
 // ================================================================
 function makeROI(vw, vh) {
     const w = Math.floor(vw * CFG.ROI_W);
     const h = Math.floor(vh * CFG.ROI_H);
-    const x = Math.floor((vw - w) / 2);
-    const y = Math.floor(vh * CFG.ROI_Y);
-    return { x, y, w, h };
+    return {
+        x: Math.floor((vw - w) / 2),
+        y: Math.floor(vh * CFG.ROI_Y),
+        w, h
+    };
 }
 
-// ================================================================
-//  ИЗВЛЕЧЕНИЕ RGB (усреднение по ROI)
-// ================================================================
-function extractChannels(ctx, roi) {
+function extractG(ctx, roi) {
     const id   = ctx.getImageData(roi.x, roi.y, roi.w, roi.h);
     const data = id.data;
-    let r = 0, g = 0, b = 0, n = 0;
-    // Каждый 4-й пиксель для скорости
-    for (let i = 0; i < data.length; i += 16) {
-        r += data[i];
-        g += data[i+1];
-        b += data[i+2];
-        n++;
+    let r=0, g=0, b=0, n=0;
+    for (let i=0; i<data.length; i+=16) {
+        r+=data[i]; g+=data[i+1]; b+=data[i+2]; n++;
     }
-    return n ? { r:r/n, g:g/n, b:b/n } : { r:128, g:128, b:128 };
+    if (!n) return { g:128, lum:128 };
+    r/=n; g/=n; b/=n;
+    return { g, r, b, lum:(r+g+b)/3 };
 }
 
 // ================================================================
-//  АНАЛИЗ СИГНАЛА
+//  АНАЛИЗ — с жёсткой валидацией
 // ================================================================
 function analyze() {
-    const N   = S.rawG.length;
+    const N = S.rawG.length;
     if (N < 60) return;
 
-    // Реальный FPS из последних N сэмплов
-    const dt  = S.times[N-1] - S.times[0];
-    const fps = (N - 1) / (dt / 1000);
-    if (fps < 10) return;
+    // Реальный FPS
+    const dtTotal = S.times[N-1] - S.times[0];
+    const fps = (N-1) / (dtTotal / 1000);
+    if (fps < 10) { setInvalid('FPS слишком низкий'); return; }
 
-    // 1. Detrend (убираем медленный дрейф вычитанием скользящего среднего)
-    const win      = Math.round(fps * 3); // 3-секундное окно
-    const detrend  = detrendSignal(S.rawG, win);
-    S.detrended    = detrend;
+    // 1. Detrend
+    const winSec   = 3;
+    const winN     = Math.round(fps * winSec);
+    const detrend  = detrendMovAvg(S.rawG, winN);
 
-    // 2. Нормализация амплитуды
-    const norm     = normalize(detrend);
+    // 2. Нормализация
+    const normed   = zNorm(detrend);
 
-    // 3. Bandpass Butterworth 2-го порядка
-    const bp       = butterBandpass(norm, fps, CFG.BP_LOW, CFG.BP_HIGH);
+    // 3. Butterworth bandpass
+    const bp       = butterBP(normed, fps, CFG.BP_LO, CFG.BP_HI);
     S.filtered     = bp;
 
-    // 4. Амплитуда и SNR
-    const recent   = bp.slice(-Math.round(fps * 8));
-    const ampVal   = stdDev(recent);
-    S.amplitude    = ampVal;
+    // 4. Амплитуда (std последних 8 сек)
+    const win8     = Math.round(fps * 8);
+    const recent   = bp.slice(-win8);
+    const amp      = stdDev(recent);
+    S.amplitude    = amp;
 
-    // Оценка SNR: сигнал в диапазоне пульса / шум вне диапазона
-    S.snr          = estimateSNR(norm, fps);
-
-    // Обновляем диагностику
-    updateDiag(fps, ampVal, S.snr);
-
-    // Если амплитуда слишком мала — нет смысла искать пики
-    if (ampVal < 0.002) {
-        document.getElementById('lblFiltered').textContent = 'сигнал слабый';
-        drawFiltered();
+    // ── ПРОВЕРКА 1: Амплитуда ───────────────────────────────────
+    if (amp < CFG.MIN_AMPLITUDE) {
+        setInvalid(`слабый сигнал (ампл:${amp.toFixed(4)}, нужно >${CFG.MIN_AMPLITUDE})`);
+        updateDiag(amp, null, null, fps);
+        drawFiltChart();
         return;
     }
 
     // 5. Детекция пиков
-    const minDist  = Math.round(fps * CFG.PEAK_MIN_DIST_SEC);
-    const peaks    = findPeaks(bp, minDist, CFG.PEAK_THRESHOLD);
-    S.peaks        = peaks;
+    const minDist = Math.round(fps * CFG.PEAK_MIN_SEC);
+    const peaks   = findPeaks(bp, minDist);
+    S.peaks       = peaks;
+
+    // ── ПРОВЕРКА 2: Достаточно пиков ────────────────────────────
+    if (peaks.length < CFG.MIN_PEAKS) {
+        setInvalid(`мало пиков (${peaks.length}, нужно ≥${CFG.MIN_PEAKS})`);
+        updateDiag(amp, 0, peaks.length, fps);
+        drawFiltChart();
+        return;
+    }
 
     // 6. R-R интервалы
     const rr = [];
-    for (let i = 1; i < peaks.length; i++) {
+    for (let i=1; i<peaks.length; i++) {
         const ms = ((peaks[i] - peaks[i-1]) / fps) * 1000;
-        if (ms >= CFG.RR_MIN && ms <= CFG.RR_MAX) rr.push(ms);
+        if (ms >= CFG.RR_MIN_MS && ms <= CFG.RR_MAX_MS) rr.push(ms);
     }
     S.rr = rr;
 
-    // 7. Фильтрация R-R выбросов
-    S.rrClean = cleanRR(rr);
+    // ── ПРОВЕРКА 3: Физиологический диапазон ────────────────────
+    if (rr.length < CFG.MIN_PEAKS - 1) {
+        setInvalid(`R-R вне диапазона (частота нефизиологична)`);
+        updateDiag(amp, 0, peaks.length, fps);
+        drawFiltChart();
+        return;
+    }
 
-    // 8. Расчёт метрик
-    if (S.rrClean.length >= 4) {
-        const medRR  = median(S.rrClean);
-        const hrRaw  = 60000 / medRR;
+    // 7. Коэффициент вариации R-R (регулярность)
+    const rrMean = rr.reduce((a,b)=>a+b,0) / rr.length;
+    const rrStd  = stdDev(rr);
+    const rrCV   = rrStd / rrMean;
+    S.rrCV       = rrCV;
 
-        // Сглаживание HR
-        S.hr         = smoothHR(hrRaw);
-        S.rmssd      = Math.round(rmssd(S.rrClean));
-        S.stress     = stressIndex(S.hr, S.rmssd);
-        S.quality    = signalQuality(ampVal, S.snr, S.rrClean);
+    // ── ПРОВЕРКА 4: Регулярность пульса ─────────────────────────
+    // Настоящий пульс РЕГУЛЯРЕН. Шум — нет.
+    // CV > 0.25 означает слишком большой разброс → вероятно шум
+    if (rrCV > CFG.MAX_RR_CV) {
+        setInvalid(`нерегулярный ритм (CV:${rrCV.toFixed(2)}, норма <${CFG.MAX_RR_CV})`);
+        updateDiag(amp, rrCV, peaks.length, fps);
+        drawFiltChart();
+        return;
+    }
+
+    // ── ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ ───────────────────────────────────
+    S.rrClean = rr;
+
+    // Наращиваем счётчик валидных измерений
+    S.validStreak++;
+
+    const hrRaw = 60000 / rrMean;
+
+    // Показываем результат только после VALID_STREAK подряд
+    if (S.validStreak >= CFG.VALID_STREAK) {
+        S.isValid = true;
+
+        // Сглаживание
+        S.hrBuf.push(hrRaw);
+        if (S.hrBuf.length > CFG.HR_SMOOTH_WIN) S.hrBuf.shift();
+        S.hr = Math.round(S.hrBuf.reduce((a,b)=>a+b,0) / S.hrBuf.length);
+
+        S.rmssd  = Math.round(calcRMSSD(rr));
+        S.stress = calcStress(S.hr, S.rmssd);
 
         S.hrHistory.push(S.hr);
         if (S.hrHistory.length > 120) S.hrHistory.shift();
 
-        updateMetrics();
-        updateSQ();
-        updateStress();
+        updateHRDisplay();
+        updateHRVMetrics();
+        updateDiag(amp, rrCV, peaks.length, fps);
+        drawFiltChart();
+        drawHRChart();
+        drawRRChart();
         checkTriggers();
 
-        document.getElementById('lblHR').textContent  = `${S.hr} уд/мин`;
-        document.getElementById('lblRR').textContent  = `RMSSD:${S.rmssd}мс`;
-    }
+        const regPct = Math.round((1 - rrCV) * 100);
+        setBanner('valid',
+            `пульс: ${S.hr} уд/мин | регулярность: ${regPct}%`);
 
-    drawFiltered();
-    drawHR();
-    drawHRV();
+    } else {
+        // Ещё накапливаем стрик
+        setBanner('calib',
+            `подтверждение... (${S.validStreak}/${CFG.VALID_STREAK})`);
+        updateDiag(amp, rrCV, peaks.length, fps);
+        drawFiltChart();
+    }
+}
+
+// Сброс в невалидное состояние
+function setInvalid(reason) {
+    S.isValid     = false;
+    S.validStreak = 0;
+    S.hrBuf       = [];   // сбрасываем буфер сглаживания при потере сигнала
+    S.invalidReason = reason;
+
+    setBanner('weak', reason);
+
+    // Сбрасываем дисплей пульса
+    const el = document.getElementById('hrNum');
+    el.textContent = '--';
+    el.className   = 'hr-number';
+    document.getElementById('hrConf').textContent = reason;
 }
 
 // ================================================================
-//  DSP — ОБРАБОТКА СИГНАЛА
+//  DSP
 // ================================================================
-
-// Detrend: вычитаем скользящее среднее (убирает дрейф освещения)
-function detrendSignal(sig, winSize) {
-    const half = Math.floor(winSize / 2);
-    return sig.map((v, i) => {
-        const lo = Math.max(0, i - half);
-        const hi = Math.min(sig.length - 1, i + half);
-        let s = 0;
-        for (let j = lo; j <= hi; j++) s += sig[j];
-        return v - s / (hi - lo + 1);
+function detrendMovAvg(sig, win) {
+    const half = Math.floor(win/2);
+    return sig.map((v,i) => {
+        const lo = Math.max(0, i-half);
+        const hi = Math.min(sig.length-1, i+half);
+        let s=0; for(let j=lo;j<=hi;j++) s+=sig[j];
+        return v - s/(hi-lo+1);
     });
 }
 
-// Нормализация (Z-score)
-function normalize(sig) {
-    const mn = sig.reduce((a,b) => a+b, 0) / sig.length;
+function zNorm(sig) {
+    const mn = sig.reduce((a,b)=>a+b,0)/sig.length;
     const sd = stdDev(sig);
-    return sd > 0 ? sig.map(v => (v - mn) / sd) : sig.map(() => 0);
+    return sd>0 ? sig.map(v=>(v-mn)/sd) : sig.slice();
 }
 
-// ── Butterworth 2-го порядка (каскад 2 биквадратов) ─────────────
-// Значительно лучше подавляет шум, чем IIR 1-го порядка
-function butterBandpass(sig, fs, f1, f2) {
-    // Последовательно: highpass → lowpass (каждый 2-го порядка)
-    const hp = butter2HP(sig, fs, f1);
-    const bp = butter2LP(hp,  fs, f2);
-    return bp;
+function butterBP(sig, fs, f1, f2) {
+    return butter2LP(butter2HP(sig, fs, f1), fs, f2);
 }
 
 function butter2HP(sig, fs, fc) {
-    // Аналоговый прототип → bilinear transform
-    const w  = 2 * Math.PI * fc / fs;
-    const k  = Math.tan(w / 2);
-    const k2 = k * k;
-    const q  = Math.SQRT2; // 2-й порядок, критическое затухание
-    const a0 = 1 + q*k + k2;
-    const b  = [1/a0, -2/a0, 1/a0];
-    const a  = [1, 2*(k2-1)/a0, (1-q*k+k2)/a0];
-    return biquad(sig, b, a);
+    const w=2*Math.PI*fc/fs, k=Math.tan(w/2), k2=k*k, q=Math.SQRT2;
+    const a0=1+q*k+k2;
+    const b=[1/a0,-2/a0,1/a0];
+    const a=[1,2*(k2-1)/a0,(1-q*k+k2)/a0];
+    return biquad(sig,b,a);
 }
 
 function butter2LP(sig, fs, fc) {
-    const w  = 2 * Math.PI * fc / fs;
-    const k  = Math.tan(w / 2);
-    const k2 = k * k;
-    const q  = Math.SQRT2;
-    const a0 = 1 + q*k + k2;
-    const b  = [k2/a0, 2*k2/a0, k2/a0];
-    const a  = [1, 2*(k2-1)/a0, (1-q*k+k2)/a0];
-    return biquad(sig, b, a);
+    const w=2*Math.PI*fc/fs, k=Math.tan(w/2), k2=k*k, q=Math.SQRT2;
+    const a0=1+q*k+k2;
+    const b=[k2/a0,2*k2/a0,k2/a0];
+    const a=[1,2*(k2-1)/a0,(1-q*k+k2)/a0];
+    return biquad(sig,b,a);
 }
 
 function biquad(sig, b, a) {
-    const out = new Array(sig.length).fill(0);
-    let x1=0, x2=0, y1=0, y2=0;
-    for (let i = 0; i < sig.length; i++) {
-        const x0  = sig[i];
-        const y0  = b[0]*x0 + b[1]*x1 + b[2]*x2 - a[1]*y1 - a[2]*y2;
-        out[i] = y0;
-        x2=x1; x1=x0;
-        y2=y1; y1=y0;
+    const out=new Array(sig.length).fill(0);
+    let x1=0,x2=0,y1=0,y2=0;
+    for(let i=0;i<sig.length;i++){
+        const x0=sig[i];
+        const y0=b[0]*x0+b[1]*x1+b[2]*x2-a[1]*y1-a[2]*y2;
+        out[i]=y0; x2=x1;x1=x0;y2=y1;y1=y0;
     }
     return out;
 }
 
-// ── Детекция пиков ───────────────────────────────────────────────
-function findPeaks(sig, minDist, threshFrac) {
+// Детекция пиков — улучшенная:
+// Адаптивный порог из МЕДИАНЫ, а не максимума
+function findPeaks(sig, minDist) {
     const N = sig.length;
+    if (N < 10) return [];
+
+    // Порог = 50% от медианы положительных значений
+    const pos = sig.filter(v=>v>0);
+    if (!pos.length) return [];
+    const med = median(pos);
+    const threshold = med * 0.5;
+
     const peaks = [];
+    let last = -minDist;
 
-    // Адаптивный порог: медиана верхних 25% значений * threshFrac
-    const sorted = [...sig].sort((a,b) => b-a);
-    const top25  = sorted.slice(0, Math.max(1, Math.floor(N * 0.25)));
-    const threshold = (top25.reduce((a,b)=>a+b,0)/top25.length) * threshFrac;
+    for (let i=1; i<N-1; i++) {
+        if (sig[i] > threshold &&
+            sig[i] >= sig[i-1] &&
+            sig[i] >= sig[i+1] &&
+            i - last >= minDist) {
 
-    let lastPeak = -minDist;
-
-    for (let i = 1; i < N - 1; i++) {
-        if (
-            sig[i] > threshold          &&
-            sig[i] > sig[i-1]           &&
-            sig[i] >= sig[i+1]          &&
-            i - lastPeak >= minDist
-        ) {
-            // Уточнение: ищем локальный максимум в окне ±2
+            // Уточняем локальный максимум в окне ±3
             let best = i;
-            for (let j = Math.max(1,i-2); j <= Math.min(N-2,i+2); j++) {
-                if (sig[j] > sig[best]) best = j;
+            for (let j=Math.max(1,i-3); j<=Math.min(N-2,i+3); j++) {
+                if (sig[j]>sig[best]) best=j;
             }
-            if (best - lastPeak >= minDist) {
+            if (best - last >= minDist) {
                 peaks.push(best);
-                lastPeak = best;
+                last = best;
             }
         }
     }
     return peaks;
 }
 
-// ── Очистка R-R от выбросов ──────────────────────────────────────
-function cleanRR(rr) {
-    if (rr.length < 3) return rr;
-    const med = median(rr);
-    const lo  = med * (1 - CFG.RR_OUTLIER);
-    const hi  = med * (1 + CFG.RR_OUTLIER);
-    const clean = rr.filter(v => v >= lo && v <= hi);
-    // Если отфильтровали >50% — вернуть исходный (не хватает данных)
-    return clean.length >= Math.ceil(rr.length * 0.5) ? clean : rr;
-}
-
-// ── Сглаживание HR ───────────────────────────────────────────────
-function smoothHR(hrNew) {
-    // Ограничиваем скорость изменения
-    if (S.hrBuf.length > 0) {
-        const last = S.hrBuf[S.hrBuf.length - 1];
-        const diff = hrNew - last;
-        if (Math.abs(diff) > CFG.HR_MAX_JUMP) {
-            hrNew = last + Math.sign(diff) * CFG.HR_MAX_JUMP;
-        }
-    }
-    S.hrBuf.push(hrNew);
-    if (S.hrBuf.length > CFG.HR_SMOOTH) S.hrBuf.shift();
-    const avg = S.hrBuf.reduce((a,b)=>a+b,0) / S.hrBuf.length;
-    return Math.round(avg);
-}
-
-// ── Вспомогательная математика ───────────────────────────────────
-function stdDev(arr) {
-    if (arr.length < 2) return 0;
-    const mn = arr.reduce((a,b)=>a+b,0) / arr.length;
-    return Math.sqrt(arr.map(v=>(v-mn)**2).reduce((a,b)=>a+b,0) / arr.length);
-}
-
-function median(arr) {
-    const s = [...arr].sort((a,b)=>a-b);
-    const m = Math.floor(s.length/2);
-    return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
-}
-
-function rmssd(rr) {
-    if (rr.length < 2) return 0;
-    let s = 0;
-    for (let i=1; i<rr.length; i++) { const d=rr[i]-rr[i-1]; s+=d*d; }
+function calcRMSSD(rr) {
+    if (rr.length<2) return 0;
+    let s=0;
+    for(let i=1;i<rr.length;i++){const d=rr[i]-rr[i-1];s+=d*d;}
     return Math.sqrt(s/(rr.length-1));
 }
 
-function stressIndex(hr, rmssdVal) {
-    const hrS = Math.max(0, Math.min(100, (hr-60)*2));
-    const rvS = Math.max(0, Math.min(100, 100-rmssdVal*2));
-    return Math.round(hrS*0.4 + rvS*0.6);
+function calcStress(hr, rmssdV) {
+    const h = Math.max(0,Math.min(100,(hr-60)*2));
+    const r = Math.max(0,Math.min(100,100-rmssdV*2));
+    return Math.round(h*0.4+r*0.6);
 }
 
-function signalQuality(amp, snr, rrClean) {
-    let q = 0;
-    if (amp > 0.01)  q++;
-    if (amp > 0.03)  q++;
-    if (snr > 1.5)   q++;
-    if (rrClean.length >= 5) q++;
-    return Math.min(4, q);
+function stdDev(arr) {
+    if(arr.length<2) return 0;
+    const mn=arr.reduce((a,b)=>a+b,0)/arr.length;
+    return Math.sqrt(arr.map(v=>(v-mn)**2).reduce((a,b)=>a+b,0)/arr.length);
 }
 
-// SNR: энергия в полосе пульса / энергия вне полосы
-function estimateSNR(sig, fps) {
-    if (sig.length < 64) return 0;
-    // Простая оценка через два LP фильтра
-    const inBand  = butterBandpass(sig, fps, 0.5, 4.0);
-    const outBand = sig.map((v,i) => v - inBand[i]);
-    const sE = stdDev(inBand);
-    const nE = stdDev(outBand);
-    return nE > 0 ? sE / nE : 0;
+function median(arr) {
+    const s=[...arr].sort((a,b)=>a-b);
+    const m=Math.floor(s.length/2);
+    return s.length%2?s[m]:(s[m-1]+s[m])/2;
+}
+
+// ================================================================
+//  UI
+// ================================================================
+function setBanner(type, text) {
+    const el = document.getElementById('statusBanner');
+    el.className = 'status-banner ' + type;
+    el.textContent = text;
+}
+
+function updateHRDisplay() {
+    const el = document.getElementById('hrNum');
+    el.textContent = S.hr;
+    el.className   = 'hr-number valid';
+    if (S.hr > 100 || S.hr < 50) el.classList.replace('valid','danger');
+    else if (S.hr > 90)           el.classList.replace('valid','warning');
+
+    const regPct = Math.round((1 - S.rrCV) * 100);
+    const conf   = S.rrClean.length;
+    document.getElementById('hrConf').textContent =
+        `регулярность ${regPct}% | R-R интервалов: ${conf}`;
+}
+
+function updateHRVMetrics() {
+    const setV = (id, v, wFn, bFn) => {
+        const el = document.getElementById(id);
+        el.textContent = v > 0 ? v : '--';
+        el.className = 'hrv-val';
+        if (bFn && bFn(v)) el.classList.add('bad');
+        else if (wFn && wFn(v)) el.classList.add('warn');
+    };
+    setV('hvRmssd',  S.rmssd, v=>v<25&&v>0, v=>v<15&&v>0);
+    setV('hvStress', S.stress, v=>v>50, v=>v>75);
+
+    // Тренд HRV
+    const el = document.getElementById('hvTrend');
+    if (S.hrHistory.length > 10) {
+        const recent = S.hrHistory.slice(-5);
+        const older  = S.hrHistory.slice(-10,-5);
+        const rAvg   = recent.reduce((a,b)=>a+b,0)/recent.length;
+        const oAvg   = older.reduce((a,b)=>a+b,0)/older.length;
+        const diff   = rAvg - oAvg;
+        el.textContent = diff > 3 ? '↑ растёт' : diff < -3 ? '↓ снижается' : '→ стабильно';
+        el.className = 'hrv-val' + (diff>3?' warn':diff<-3?' bad':'');
+    } else {
+        el.textContent = '--'; el.className='hrv-val';
+    }
+}
+
+function updateDiag(amp, cv, peakN, fps) {
+    const setD = (id, val, fmt, good, warn) => {
+        const el  = document.getElementById(id);
+        const txt = val === null ? '--' : fmt(val);
+        el.textContent = txt;
+        el.className   = 'diag-val ' +
+            (val===null?'': val>=good?'green': val>=warn?'yellow':'red');
+    };
+    setD('dAmp',   amp,    v=>v.toFixed(4), CFG.MIN_AMPLITUDE, CFG.MIN_AMPLITUDE*0.5);
+    setD('dReg',   cv===null?null:(1-cv),
+         v=>(v*100).toFixed(0)+'%', 1-CFG.MAX_RR_CV, 0.6);
+    setD('dPeaks', peakN,  v=>v, CFG.MIN_PEAKS, 3);
 }
 
 // ================================================================
 //  ГРАФИКИ
 // ================================================================
-
-function drawRaw() {
-    drawLineChart('chartRaw', S.rawG.slice(-200), '#4488ff', 'lblRaw',
-        v => `G:${v.toFixed(4)}`);
+function drawRawChart() {
+    const data = S.rawG.slice(-300);
+    if (data.length<2) return;
+    plotLine('chRaw', data, '#4466ff', 'lblRaw',
+        d=>`G/lum:${d[d.length-1].toFixed(4)}`);
 }
 
-function drawFiltered() {
-    if (S.filtered.length < 2) return;
-    const display = S.filtered.slice(-200);
-    const canvas  = document.getElementById('chartFiltered');
-    const ctx     = canvas.getContext('2d');
-    const W = canvas.offsetWidth||300, H = canvas.offsetHeight||70;
+function drawFiltChart() {
+    const data = S.filtered.slice(-300);
+    if (data.length<2) return;
+
+    const canvas = document.getElementById('chFilt');
+    const ctx    = canvas.getContext('2d');
+    const W=canvas.offsetWidth||300, H=canvas.offsetHeight||70;
     canvas.width=W; canvas.height=H;
+    ctx.fillStyle='#0c0c14'; ctx.fillRect(0,0,W,H);
+    drawGrid(ctx,W,H);
 
-    ctx.fillStyle='#0f0f1a'; ctx.fillRect(0,0,W,H);
-    grid(ctx,W,H);
+    const mn=Math.min(...data), mx=Math.max(...data), rng=mx-mn||1;
+    const sy = v => H - ((v-mn)/rng)*H*0.85 - H*0.075;
 
-    const mn=Math.min(...display), mx=Math.max(...display), rng=mx-mn||1;
-    const scaleY = v => H - ((v-mn)/rng)*H*0.85 - H*0.075;
-
-    // Линия
     ctx.strokeStyle='#00ff88'; ctx.lineWidth=1.5;
-    ctx.shadowColor='#00ff88'; ctx.shadowBlur=4;
+    ctx.shadowColor='#00ff88'; ctx.shadowBlur=3;
     ctx.beginPath();
-    display.forEach((v,i)=>{
-        const x=(i/(display.length-1))*W, y=scaleY(v);
-        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    data.forEach((v,i)=>{
+        const x=(i/(data.length-1))*W;
+        i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));
     });
     ctx.stroke(); ctx.shadowBlur=0;
 
     // Пики
     if (S.peaks.length && S.filtered.length) {
-        const offset = S.filtered.length - display.length;
-        ctx.fillStyle='#ff4400';
-        S.peaks.forEach(pi => {
-            const di = pi - offset;
-            if (di>=0 && di<display.length) {
-                const x=(di/(display.length-1))*W;
-                const y=scaleY(display[di]);
-                ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+        const off = S.filtered.length - data.length;
+        ctx.fillStyle='#ff3300';
+        S.peaks.forEach(pi=>{
+            const di=pi-off;
+            if(di>=0&&di<data.length){
+                const x=(di/(data.length-1))*W;
+                ctx.beginPath();
+                ctx.arc(x, sy(data[di]), 4, 0, Math.PI*2);
+                ctx.fill();
             }
         });
     }
 
-    const amp = rng.toFixed(4);
-    document.getElementById('lblFiltered').textContent =
-        rng > 0.01 ? `A:${amp}` : `⚠ слабый (${amp})`;
+    const amp = S.amplitude;
+    document.getElementById('lblFilt').textContent =
+        amp >= CFG.MIN_AMPLITUDE
+            ? `A:${amp.toFixed(4)} ✓`
+            : `A:${amp.toFixed(4)} ✗слабый`;
 }
 
-function drawHR() {
+function drawHRChart() {
     const data = S.hrHistory;
-    if (data.length < 2) return;
-    const canvas = document.getElementById('chartHR');
-    const ctx    = canvas.getContext('2d');
-    const W=canvas.offsetWidth||300, H=canvas.offsetHeight||70;
-    canvas.width=W; canvas.height=H;
-    ctx.fillStyle='#0f0f1a'; ctx.fillRect(0,0,W,H);
+    if (data.length<2) return;
+    const canvas=document.getElementById('chHR');
+    const ctx=canvas.getContext('2d');
+    const W=canvas.offsetWidth||300,H=canvas.offsetHeight||70;
+    canvas.width=W;canvas.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);
 
     const mn=Math.max(40,Math.min(...data)-5);
     const mx=Math.min(180,Math.max(...data)+5);
@@ -885,7 +904,8 @@ function drawHR() {
 
     // Зоны
     [[40,60,'rgba(0,80,255,0.08)'],[60,100,'rgba(0,255,136,0.08)'],
-     [100,140,'rgba(255,140,0,0.08)'],[140,180,'rgba(255,40,40,0.08)']].forEach(([a,b,c])=>{
+     [100,140,'rgba(255,140,0,0.08)'],[140,180,'rgba(255,40,40,0.08)']
+    ].forEach(([a,b,c])=>{
         const y1=H-((Math.min(b,mx)-mn)/rng)*H;
         const y2=H-((Math.max(a,mn)-mn)/rng)*H;
         if(y1<y2){ctx.fillStyle=c;ctx.fillRect(0,y1,W,y2-y1);}
@@ -901,76 +921,74 @@ function drawHR() {
     ctx.setLineDash([]);
 
     ctx.strokeStyle='#ff6600';ctx.lineWidth=2;
-    ctx.shadowColor='#ff6600';ctx.shadowBlur=6;
+    ctx.shadowColor='#ff6600';ctx.shadowBlur=5;
     ctx.beginPath();
     data.forEach((v,i)=>{
         const x=(i/(data.length-1))*W, y=H-((v-mn)/rng)*H;
         i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     });
     ctx.stroke();ctx.shadowBlur=0;
+    document.getElementById('lblHR').textContent=`${S.hr} уд/мин`;
 }
 
-function drawHRV() {
+function drawRRChart() {
     const rr = S.rrClean;
-    if (rr.length < 3) return;
-    const canvas = document.getElementById('chartHRV');
-    const ctx    = canvas.getContext('2d');
-    const W=canvas.offsetWidth||300, H=canvas.offsetHeight||90;
-    canvas.width=W; canvas.height=H;
-    ctx.fillStyle='#0f0f1a'; ctx.fillRect(0,0,W,H);
+    if (rr.length<3) return;
+    const canvas=document.getElementById('chRR');
+    const ctx=canvas.getContext('2d');
+    const W=canvas.offsetWidth||300,H=canvas.offsetHeight||90;
+    canvas.width=W;canvas.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);
 
-    const mn=Math.min(...rr)-20, mx=Math.max(...rr)+20, rng=mx-mn||1;
+    const mn=Math.min(...rr)-30,mx=Math.max(...rr)+30,rng=mx-mn||1;
     const avg=rr.reduce((a,b)=>a+b,0)/rr.length;
     const avgY=H-((avg-mn)/rng)*H;
 
-    ctx.strokeStyle='rgba(0,255,136,0.3)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.strokeStyle='rgba(0,255,136,0.25)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
     ctx.beginPath();ctx.moveTo(0,avgY);ctx.lineTo(W,avgY);ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle='rgba(0,255,136,0.5)';ctx.font='10px Courier New';
-    ctx.fillText(`avg:${Math.round(avg)}мс`,4,avgY-3);
+    ctx.fillStyle='rgba(0,255,136,0.4)';ctx.font='10px Courier New';
+    ctx.fillText(`avg:${Math.round(avg)}мс | CV:${S.rrCV.toFixed(3)}`,4,avgY-4);
 
-    const bw=Math.max(2,W/rr.length-1);
+    const bw=Math.max(3,W/rr.length-2);
     rr.forEach((v,i)=>{
         const x=(i/rr.length)*W, y=H-((v-mn)/rng)*H;
         const dev=Math.abs(v-avg);
         ctx.fillStyle=dev<30?'#00ff88':dev<80?'#ff9900':'#ff3333';
         ctx.fillRect(x,y,bw,H-y);
         if(i>0){
-            const px=((i-1)/rr.length)*W+bw/2,pv=rr[i-1],py=H-((pv-mn)/rng)*H;
-            ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
+            const px=((i-1)/rr.length)*W+bw/2;
+            const py=H-((rr[i-1]-mn)/rng)*H;
+            ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
             ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x+bw/2,y);ctx.stroke();
         }
     });
+    document.getElementById('lblRR').textContent=
+        `RMSSD:${S.rmssd}мс | CV:${S.rrCV.toFixed(3)}`;
 }
 
-function drawLineChart(id, data, color, lblId, fmtFn) {
-    if (data.length < 2) return;
-    const canvas = document.getElementById(id);
-    const ctx    = canvas.getContext('2d');
-    const W=canvas.offsetWidth||300, H=canvas.offsetHeight||70;
-    canvas.width=W; canvas.height=H;
-    ctx.fillStyle='#0f0f1a'; ctx.fillRect(0,0,W,H);
-    grid(ctx,W,H);
-
-    const mn=Math.min(...data), mx=Math.max(...data), rng=mx-mn||1;
-    ctx.strokeStyle=color; ctx.lineWidth=1.5;
-    ctx.shadowColor=color; ctx.shadowBlur=3;
+function plotLine(id, data, color, lblId, fmtFn) {
+    const canvas=document.getElementById(id);
+    const ctx=canvas.getContext('2d');
+    const W=canvas.offsetWidth||300,H=canvas.offsetHeight||70;
+    canvas.width=W;canvas.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);
+    drawGrid(ctx,W,H);
+    const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||0.001;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;
+    ctx.shadowColor=color;ctx.shadowBlur=3;
     ctx.beginPath();
     data.forEach((v,i)=>{
         const x=(i/(data.length-1))*W;
         const y=H-((v-mn)/rng)*H*0.85-H*0.075;
         i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     });
-    ctx.stroke(); ctx.shadowBlur=0;
-
-    if(lblId && fmtFn) {
-        document.getElementById(lblId).textContent =
-            fmtFn(data[data.length-1]);
-    }
+    ctx.stroke();ctx.shadowBlur=0;
+    if(lblId&&fmtFn) document.getElementById(lblId).textContent=fmtFn(data);
 }
 
-function grid(ctx, W, H) {
-    ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+function drawGrid(ctx,W,H) {
+    ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
     for(let i=1;i<4;i++){
         const y=H/4*i;
         ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
@@ -981,27 +999,25 @@ function grid(ctx, W, H) {
 //  OVERLAY
 // ================================================================
 function drawOverlay(roi, vw, vh) {
-    const ov  = document.getElementById('overlayCanvas');
-    const ctx = ov.getContext('2d');
-    const dW  = ov.offsetWidth  || 360;
-    const dH  = ov.offsetHeight || 150;
-    ov.width=dW; ov.height=dH;
+    const ov=document.getElementById('overlayCanvas');
+    const ctx=ov.getContext('2d');
+    const dW=ov.offsetWidth||360,dH=ov.offsetHeight||160;
+    ov.width=dW;ov.height=dH;
     ctx.clearRect(0,0,dW,dH);
 
-    const sx=dW/vw, sy=dH/vh;
-    const rx=roi.x*sx, ry=roi.y*sy, rw=roi.w*sx, rh=roi.h*sy;
+    const sx=dW/vw,sy=dH/vh;
+    const rx=roi.x*sx,ry=roi.y*sy,rw=roi.w*sx,rh=roi.h*sy;
 
-    // Затемнение
     ctx.fillStyle='rgba(0,0,0,0.5)';
     ctx.fillRect(0,0,dW,dH);
     ctx.clearRect(rx,ry,rw,rh);
 
-    const color = S.calibDone ? '#00ff88' : '#ffaa00';
-    ctx.shadowColor=color; ctx.shadowBlur=14;
-    ctx.strokeStyle=color; ctx.lineWidth=3;
+    const color = S.isValid?'#00ff88': S.calibDone?'#ff9900':'#ffaa00';
+    ctx.shadowColor=color;ctx.shadowBlur=14;
+    ctx.strokeStyle=color;ctx.lineWidth=3;
     ctx.strokeRect(rx,ry,rw,rh);
 
-    const cl=16; ctx.lineWidth=4; ctx.shadowBlur=8;
+    const cl=16;ctx.lineWidth=4;ctx.shadowBlur=8;
     [[[rx+cl,ry],[rx,ry],[rx,ry+cl]],
      [[rx+rw-cl,ry],[rx+rw,ry],[rx+rw,ry+cl]],
      [[rx+cl,ry+rh],[rx,ry+rh],[rx,ry+rh-cl]],
@@ -1015,110 +1031,53 @@ function drawOverlay(roi, vw, vh) {
     });
     ctx.shadowBlur=0;
 
-    ctx.fillStyle=color; ctx.font='bold 11px Courier New';
+    const lbl = S.isValid?`● ${S.hr} уд/мин`:
+                S.calibDone?'○ анализ...':'○ калибровка';
+    ctx.fillStyle=color;ctx.font='bold 11px Courier New';
     ctx.textAlign='center';
-    ctx.fillText(S.calibDone?'● ЛОБ':'○ ЛОБ', rx+rw/2, ry-4);
+    ctx.fillText(lbl,rx+rw/2,ry-4);
     ctx.textAlign='left';
 }
 
 // ================================================================
-//  UI
+//  ТРИГГЕРЫ
 // ================================================================
-function updateMetrics() {
-    const set=(id,v,warnFn,dangerFn)=>{
-        const el=document.getElementById(id);
-        el.textContent=v>0?v:'--';
-        el.className='metric-value';
-        if(dangerFn&&dangerFn(v)) el.classList.add('danger');
-        else if(warnFn&&warnFn(v)) el.classList.add('warning');
-    };
-    set('hrValue',    S.hr,    v=>v>90,       v=>v>100||(v<50&&v>0));
-    set('rmssdValue', S.rmssd, v=>v<25&&v>0,  v=>v<15&&v>0);
-    set('stressValue',S.stress,v=>v>50,        v=>v>75);
-}
-
-function updateDiag(fps, amp, snr) {
-    const setDiag=(id,label,val,good,warn)=>{
-        const el=document.getElementById(id);
-        const txt=typeof val==='number'?val.toFixed(3):val;
-        el.innerHTML=`${label} <span>${txt}</span>`;
-        el.className='diag-item '+(val>=good?'good':val>=warn?'warn':'bad');
-    };
-    setDiag('diagFps',   'FPS',  fps,  25, 15);
-    setDiag('diagAmp',   'Ампл', amp,  0.03, 0.01);
-    setDiag('diagPeaks', 'Пики', S.peaks.length, 4, 2);
-    document.getElementById('ampLabel').textContent=`Ампл:${amp.toFixed(4)}`;
-    document.getElementById('snrLabel').textContent=`SNR:${snr.toFixed(2)}`;
-}
-
-function updateSQ() {
-    const q=S.quality;
-    for(let i=1;i<=4;i++){
-        const b=document.getElementById('sq'+i);
-        b.className='sq-bar'+(i<=q?(q>=3?' ok':' warn'):'');
-    }
-}
-
-function updateStress() {
-    const p=S.stress;
-    document.getElementById('stressFill').style.width=p+'%';
-    const [color,text]= p===0?['#555','Нет данных']:
-        p<25?['#00ff88','Расслаблен']:
-        p<50?['#88ff00','Норма']:
-        p<75?['#ff9900','Умеренный стресс']:
-             ['#ff3333','⚠ Высокий стресс'];
-    const el=document.getElementById('stressLabel');
-    el.style.color=color; el.textContent=text;
-}
-
-function updateCalib(p) {
-    document.getElementById('calibBar').style.width=(p*100)+'%';
-    document.getElementById('calibStatus').textContent =
-        p<1?`${Math.round(p*100)}% — не двигайтесь`:'✓ Готово';
-}
-
-function setDot(type) {
-    const d=document.getElementById('statusDot');
-    d.className='status-dot'+(type?' '+type:'');
-}
-
 function checkTriggers() {
+    if (!S.isValid) return;
     const now=Date.now();
     const t=(key,type,msg)=>{
         if(!S.lastTriggers[key]||now-S.lastTriggers[key]>CFG.TRIGGER_CD){
-            S.lastTriggers[key]=now; addLog(type,msg);
+            S.lastTriggers[key]=now; log(type,msg);
         }
     };
-    if(S.hr>100)              t('tachy','alert',`Тахикардия: ${S.hr} уд/мин`);
-    else if(S.hr<50&&S.hr>0)  t('brady','alert',`Брадикардия: ${S.hr} уд/мин`);
-    else if(S.hr>0)           t('hrok','ok',`Пульс: ${S.hr} уд/мин`);
-    if(S.rmssd>0&&S.rmssd<15) t('hrvlo','alert',`HRV низкий: ${S.rmssd}мс`);
-    if(S.stress>75)           t('shi','alert',`Высокий стресс: ${S.stress}%`);
-    else if(S.stress>50)      t('smd','trigger',`Умеренный стресс: ${S.stress}%`);
-    else if(S.stress>0&&S.stress<25) t('slo','ok',`Стресс низкий: ${S.stress}%`);
+    if(S.hr>100)             t('tachy','alert',`Тахикардия: ${S.hr} уд/мин`);
+    else if(S.hr<50)         t('brady','alert',`Брадикардия: ${S.hr} уд/мин`);
+    else                     t('hrok','ok',`Пульс: ${S.hr} уд/мин`);
+    if(S.rmssd>0&&S.rmssd<15)t('hl','alert',`HRV критически низкий`);
+    if(S.stress>75)          t('shi','alert',`Высокий стресс: ${S.stress}%`);
 }
 
-function addLog(type, message) {
-    const log=document.getElementById('triggerLog');
+function log(type, msg) {
+    const box=document.getElementById('logBox');
     const time=new Date().toTimeString().slice(0,5);
-    const icons={alert:'⚠',ok:'✓',info:'ℹ',trigger:'△'};
-    if(log.children.length===1){
-        const f=log.children[0].querySelector('.info');
-        if(f&&f.textContent.includes('ожидание')) log.innerHTML='';
+    const icons={alert:'⚠',ok:'✓',info:'ℹ',warn:'△'};
+    if(box.children.length===1){
+        const f=box.children[0].querySelector('.info');
+        if(f&&f.textContent.includes('ожидание')) box.innerHTML='';
     }
-    const item=document.createElement('div');
-    item.className='trigger-item';
-    item.innerHTML=`<span class="trigger-time">${time}</span>
-        <span class="trigger-msg ${type}">${icons[type]||''} ${message}</span>`;
-    log.insertBefore(item,log.firstChild);
-    while(log.children.length>20) log.removeChild(log.lastChild);
+    const row=document.createElement('div');
+    row.className='log-row';
+    row.innerHTML=`<span class="log-time">${time}</span>
+        <span class="log-msg ${type}">${icons[type]||''} ${msg}</span>`;
+    box.insertBefore(row,box.firstChild);
+    while(box.children.length>25) box.removeChild(box.lastChild);
 }
 
 window.addEventListener('resize',()=>{
-    drawRaw(); drawFiltered(); drawHR(); drawHRV();
+    drawRawChart();drawFiltChart();drawHRChart();drawRRChart();
 });
 
-addLog('info','Загружено. Нажмите Старт');
+log('info','Загружено. Нажмите Старт');
 </script>
 </body>
 </html>
