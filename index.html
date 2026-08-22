@@ -3,602 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Face Debug</title>
+    <title>MP Test</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { background:#0a0a0f; color:#e0e0e0; font-family:'Courier New',monospace; }
-
-        .header {
-            background:#0f0f1a; padding:10px 16px;
-            border-bottom:1px solid #1a1a2e;
-            font-size:14px; color:#00ff88;
-        }
-
-        .video-wrap {
-            position:relative; width:100%; height:300px;
-            background:#000; overflow:hidden;
-        }
-        /* БЕЗ зеркала — чтобы координаты совпадали */
-        #videoEl {
-            width:100%; height:300px;
-            object-fit:cover; display:block;
-        }
-        #drawCanvas {
-            position:absolute; top:0; left:0;
-            width:100%; height:300px;
-            pointer-events:none;
-        }
-
-        .controls {
-            padding:8px 16px; display:flex; gap:8px;
-            background:#0f0f1a; border-bottom:1px solid #1a1a2e;
-        }
+        body { background:#111; color:#eee; font-family:monospace; padding:16px; }
+        .row { padding:6px 0; border-bottom:1px solid #222; font-size:12px; }
+        .ok  { color:#00ff88; }
+        .err { color:#ff3333; }
+        .wait{ color:#ff9900; }
+        .info{ color:#4488ff; }
         button {
-            padding:10px 12px; border:1px solid #333;
-            border-radius:6px; background:#1a1a2e; color:#e0e0e0;
-            font-family:'Courier New',monospace; font-size:12px;
-            cursor:pointer; flex:1;
+            margin:8px 4px; padding:10px 16px;
+            background:#1a1a2e; border:1px solid #444;
+            color:#eee; font-family:monospace;
+            border-radius:6px; cursor:pointer; font-size:13px;
         }
-        button.go   { border-color:#00ff88; color:#00ff88; }
-        button.flip { border-color:#4488ff; color:#4488ff; }
-        button:disabled { opacity:0.4; }
-
-        /* Статус загрузки */
-        .load-status {
-            padding:10px 16px; font-size:12px;
-            border-bottom:1px solid #1a1a2e;
-            background:#0c0c18;
-        }
-        .load-row {
-            display:flex; align-items:center; gap:10px;
-            margin-bottom:6px; font-size:11px;
-        }
-        .load-row:last-child { margin-bottom:0; }
-        .load-icon { font-size:14px; min-width:20px; }
-        .load-text { color:#666; flex:1; }
-        .load-text.done { color:#00ff88; }
-        .load-text.fail { color:#ff3333; }
-        .load-text.wait { color:#ff9900; }
-
-        /* Главный статус */
-        .main-status {
-            padding:12px 16px; font-size:13px; font-weight:bold;
-            text-align:center; border-bottom:2px solid #111;
-            min-height:44px;
-        }
-        .main-status.idle    { background:#0f0f1a; color:#555; }
-        .main-status.loading { background:#0a0a1a; color:#4488ff; }
-        .main-status.noface  { background:#1a0800; color:#ff6600; }
-        .main-status.found   { background:#051505; color:#00ff88; }
-        .main-status.error   { background:#1a0000; color:#ff3333; }
-
-        /* Цифры диагностики */
-        .diag-grid {
-            display:grid; grid-template-columns:repeat(2,1fr);
-            gap:1px; background:#111;
-            border-bottom:1px solid #1a1a2e;
-        }
-        .diag-cell {
-            background:#0c0c14; padding:8px 12px;
-        }
-        .diag-label { font-size:9px; color:#555; text-transform:uppercase; letter-spacing:1px; }
-        .diag-value { font-size:13px; color:#888; margin-top:2px; word-break:break-all; }
-        .diag-value.ok  { color:#00ff88; }
-        .diag-value.bad { color:#ff3333; }
-        .diag-value.warn{ color:#ff9900; }
-
-        /* Лог */
-        .log-wrap { padding:10px 16px 20px; }
-        .log-title { font-size:10px; color:#555; text-transform:uppercase; margin-bottom:6px; }
-        .log-box {
-            background:#0c0c14; border:1px solid #1a1a2e;
-            border-radius:6px; padding:8px;
-            height:200px; overflow-y:auto; font-size:11px;
-        }
-        .log-r { padding:2px 0; border-bottom:1px solid #111; display:flex; gap:8px; }
-        .log-r:last-child { border:none; }
-        .log-t { color:#444; min-width:50px; font-size:10px; }
-        .log-m      { color:#888; }
-        .log-m.ok   { color:#00ff88; }
-        .log-m.warn { color:#ff9900; }
-        .log-m.err  { color:#ff3333; }
-        .log-m.info { color:#4488ff; }
+        #log { margin-top:12px; max-height:400px; overflow-y:auto; }
     </style>
 </head>
 <body>
+<h3 style="color:#00ff88;margin-bottom:12px;">MediaPipe Тест</h3>
 
-<div class="header">🔍 Диагностика MediaPipe FaceMesh</div>
+<button onclick="test1()">1. Тест загрузки скрипта</button>
+<button onclick="test2()">2. Тест FaceMesh объекта</button>
+<button onclick="test3()">3. Тест без initialize()</button>
 
-<div class="video-wrap">
-    <video id="videoEl" autoplay playsinline muted></video>
-    <canvas id="drawCanvas"></canvas>
-</div>
-
-<div class="controls">
-    <button class="go" id="btnStart" onclick="startCamera()" disabled>▶ Камера</button>
-    <button class="flip" id="btnFlip" onclick="flipCamera()" disabled>⟳ Перевернуть</button>
-</div>
-
-<!-- Статус загрузки компонентов -->
-<div class="load-status">
-    <div class="load-row">
-        <span class="load-icon" id="icScript">⏳</span>
-        <span class="load-text" id="txScript">Загрузка скриптов MediaPipe...</span>
-    </div>
-    <div class="load-row">
-        <span class="load-icon" id="icInit">⏳</span>
-        <span class="load-text" id="txInit">Инициализация FaceMesh...</span>
-    </div>
-    <div class="load-row">
-        <span class="load-icon" id="icWasm">⏳</span>
-        <span class="load-text" id="txWasm">Загрузка WASM модели...</span>
-    </div>
-</div>
-
-<div class="main-status loading" id="mainStatus">загрузка...</div>
-
-<!-- Диагностика -->
-<div class="diag-grid">
-    <div class="diag-cell">
-        <div class="diag-label">MediaPipe статус</div>
-        <div class="diag-value" id="dMPStatus">загрузка</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Камера</div>
-        <div class="diag-value" id="dCamera">нет</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Разрешение видео</div>
-        <div class="diag-value" id="dResolution">--</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">FPS / Кадров обработано</div>
-        <div class="diag-value" id="dFPS">-- / 0</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Лиц найдено</div>
-        <div class="diag-value" id="dFaces">0</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Точек (landmarks)</div>
-        <div class="diag-value" id="dLandmarks">0</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Уверенность детекции</div>
-        <div class="diag-value" id="dConf">--</div>
-    </div>
-    <div class="diag-cell">
-        <div class="diag-label">Ошибка</div>
-        <div class="diag-value" id="dError">нет</div>
-    </div>
-</div>
-
-<div class="log-wrap">
-    <div class="log-title">Подробный лог</div>
-    <div class="log-box" id="logBox"></div>
-</div>
+<div id="log"></div>
 
 <script>
-// ================================================================
-//  ДИАГНОСТИКА MEDIAPIPE
-//  Цель: понять ПОЧЕМУ не детектирует лицо
-// ================================================================
-
-const D = {
-    mpLoaded:   false,
-    mpInited:   false,
-    faceMesh:   null,
-    stream:     null,
-    camera:     null,
-    facing:     'user',
-    frameCount: 0,
-    faceCount:  0,
-    fps:        0,
-    fpsTimer:   0,
-    fpsCount:   0,
-};
-
-// ================================================================
-//  ШАГ 1: Загрузка скриптов
-// ================================================================
-log('info', 'Начало загрузки MediaPipe...');
-setLoad('icScript','txScript','wait','Загрузка скриптов...');
-
-// Загружаем скрипты динамически с проверкой
-loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js')
-.then(()=>{
-    log('ok','camera_utils.js загружен');
-    return loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js');
-})
-.then(()=>{
-    log('ok','face_mesh.js загружен');
-    setLoad('icScript','txScript','done','✓ Скрипты загружены');
-    D.mpLoaded = true;
-    initFaceMesh();
-})
-.catch(e=>{
-    log('err','Ошибка загрузки скриптов: '+e.message);
-    setLoad('icScript','txScript','fail','✗ Ошибка загрузки: '+e.message);
-    setStatus('error','Не удалось загрузить MediaPipe');
-    document.getElementById('dMPStatus').textContent='ошибка загрузки';
-    document.getElementById('dMPStatus').className='diag-value bad';
-    // Всё равно включаем кнопку — попробуем без MP
-    document.getElementById('btnStart').disabled = false;
-});
-
-function loadScript(src) {
-    return new Promise((resolve, reject) => {
-        // Проверяем не загружен ли уже
-        if (document.querySelector(`script[src="${src}"]`)) {
-            resolve(); return;
-        }
-        const s = document.createElement('script');
-        s.src = src;
-        s.crossOrigin = 'anonymous';
-        s.onload  = resolve;
-        s.onerror = () => reject(new Error('Failed: '+src));
-        document.head.appendChild(s);
-    });
+function L(text, cls='info') {
+    const d = document.createElement('div');
+    d.className = 'row ' + cls;
+    d.textContent = new Date().toTimeString().slice(0,8) + ' ' + text;
+    document.getElementById('log').prepend(d);
 }
 
-// ================================================================
-//  ШАГ 2: Инициализация FaceMesh
-// ================================================================
-async function initFaceMesh() {
-    setLoad('icInit','txInit','wait','Инициализация FaceMesh...');
-    log('info','Создаём FaceMesh объект...');
-
-    try {
-        // Проверяем что FaceMesh доступен
-        if (typeof FaceMesh === 'undefined') {
-            throw new Error('FaceMesh не определён — скрипт загружен некорректно');
+// Тест 1: просто загружаем скрипт
+async function test1() {
+    L('=== ТЕСТ 1: загрузка скрипта ===');
+    
+    const urls = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
+        'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js',
+        'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js',
+    ];
+    
+    for (const url of urls) {
+        L('Пробую: ' + url.split('/').slice(-2).join('/'), 'wait');
+        try {
+            await loadScript(url);
+            L('✓ Загружен: ' + url.split('/').slice(-2).join('/'), 'ok');
+            L('typeof FaceMesh = ' + typeof FaceMesh, 
+              typeof FaceMesh !== 'undefined' ? 'ok' : 'err');
+            break;
+        } catch(e) {
+            L('✗ Ошибка: ' + e.message, 'err');
         }
-        log('ok','Класс FaceMesh найден');
-
-        D.faceMesh = new FaceMesh({
-            locateFile: (file) => {
-                const url = `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`;
-                log('info',`Запрос файла: ${file}`);
-                return url;
-            }
-        });
-
-        D.faceMesh.setOptions({
-            maxNumFaces:            1,
-            refineLandmarks:        false,  // false = быстрее, проще
-            minDetectionConfidence: 0.3,    // низкий порог — легче найти
-            minTrackingConfidence:  0.3,
-        });
-
-        D.faceMesh.onResults(onResults);
-
-        setLoad('icInit','txInit','done','✓ FaceMesh создан, загрузка модели...');
-        setLoad('icWasm','txWasm','wait','Загрузка WASM / TFLite модели...');
-        log('info','Ожидаем загрузку WASM модели (может занять 10-30 сек)...');
-
-        // initialize() загружает WASM и модель
-        await D.faceMesh.initialize();
-
-        D.mpInited = true;
-        setLoad('icInit','txInit','done','✓ FaceMesh инициализирован');
-        setLoad('icWasm','txWasm','done','✓ WASM модель загружена');
-        log('ok','FaceMesh полностью готов!');
-
-        document.getElementById('dMPStatus').textContent = 'готов ✓';
-        document.getElementById('dMPStatus').className   = 'diag-value ok';
-        setStatus('idle','MediaPipe готов — нажмите Камера');
-        document.getElementById('btnStart').disabled = false;
-
-    } catch(e) {
-        log('err','Ошибка инициализации: '+e.message);
-        log('err','Stack: '+e.stack);
-        setLoad('icInit','txInit','fail','✗ '+e.message);
-        setLoad('icWasm','txWasm','fail','✗ не загружен');
-        document.getElementById('dMPStatus').textContent = 'ошибка: '+e.message;
-        document.getElementById('dMPStatus').className   = 'diag-value bad';
-        document.getElementById('dError').textContent    = e.message;
-        document.getElementById('dError').className      = 'diag-value bad';
-        setStatus('error','Ошибка: '+e.message);
-        document.getElementById('btnStart').disabled = false;
-        log('warn','Попробуйте всё равно нажать Камера — запустится базовый режим');
     }
 }
 
-// ================================================================
-//  КАМЕРА
-// ================================================================
-async function startCamera() {
-    document.getElementById('btnStart').disabled = true;
-    log('info',`Запуск камеры (режим: ${D.facing})...`);
-
-    try {
-        if (D.stream) D.stream.getTracks().forEach(t=>t.stop());
-        if (D.camera) { try{D.camera.stop();}catch(e){} D.camera=null; }
-
-        const constraints = {
-            video: {
-                facingMode: D.facing,
-                width:  { ideal: 640, min: 320 },
-                height: { ideal: 480, min: 240 },
-                frameRate: { ideal: 30, min: 15 },
-            }
-        };
-
-        log('info','getUserMedia запрос...');
-        D.stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        const video  = document.getElementById('videoEl');
-        video.srcObject = D.stream;
-        await new Promise(r => video.onloadedmetadata = r);
-        await video.play();
-
-        // Реальные параметры
-        const track    = D.stream.getVideoTracks()[0];
-        const settings = track.getSettings();
-        log('ok',`Камера: ${settings.width}x${settings.height} @ ${settings.frameRate}fps`);
-        log('ok',`facingMode: ${settings.facingMode || D.facing}`);
-        log('ok',`deviceId: ${(settings.deviceId||'').slice(0,20)}...`);
-
-        document.getElementById('dCamera').textContent = `${settings.facingMode||D.facing}`;
-        document.getElementById('dCamera').className   = 'diag-value ok';
-        document.getElementById('dResolution').textContent =
-            `${settings.width}x${settings.height}@${Math.round(settings.frameRate)}`;
-        document.getElementById('dResolution').className = 'diag-value ok';
-
-        document.getElementById('btnFlip').disabled = false;
-
-        D.frameCount = 0;
-        D.faceCount  = 0;
-        D.fpsCount   = 0;
-        D.fpsTimer   = performance.now();
-
-        if (D.mpInited && D.faceMesh) {
-            log('ok','Запуск в режиме MediaPipe FaceMesh');
-            // Используем Camera utility от MediaPipe
-            D.camera = new Camera(video, {
-                onFrame: async () => {
-                    try {
-                        await D.faceMesh.send({ image: video });
-                    } catch(e) {
-                        log('err','send() ошибка: '+e.message);
-                    }
-                },
-                width:  settings.width  || 640,
-                height: settings.height || 480,
-            });
-            D.camera.start();
-            setStatus('noface','Камера запущена — смотрите в камеру');
-
-        } else {
-            log('warn','MediaPipe не готов — базовый режим');
-            setStatus('noface','Базовый режим (без FaceMesh)');
-            requestAnimationFrame(basicFrame);
-        }
-
-    } catch(e) {
-        log('err','Ошибка камеры: '+e.message);
-        document.getElementById('dCamera').textContent = 'ошибка: '+e.message;
-        document.getElementById('dCamera').className   = 'diag-value bad';
-        setStatus('error','Ошибка камеры: '+e.message);
-        document.getElementById('btnStart').disabled = false;
-    }
-}
-
-function flipCamera() {
-    D.facing = D.facing==='user'?'environment':'user';
-    log('info','Переключение камеры: '+D.facing);
-    startCamera();
-}
-
-// ================================================================
-//  CALLBACK — результаты FaceMesh
-// ================================================================
-function onResults(results) {
-    const ts = performance.now();
-    D.frameCount++;
-
-    // FPS
-    D.fpsCount++;
-    if (ts - D.fpsTimer >= 1000) {
-        D.fps = D.fpsCount;
-        D.fpsCount = 0;
-        D.fpsTimer = ts;
-    }
-
-    document.getElementById('dFPS').textContent =
-        `${D.fps} / ${D.frameCount}`;
-
-    const canvas = document.getElementById('drawCanvas');
-    const ctx    = canvas.getContext('2d');
-    const W = canvas.offsetWidth  || 360;
-    const H = canvas.offsetHeight || 300;
-    canvas.width=W; canvas.height=H;
-    ctx.clearRect(0,0,W,H);
-
-    // Нет лиц
-    if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-        document.getElementById('dFaces').textContent    = '0';
-        document.getElementById('dFaces').className      = 'diag-value bad';
-        document.getElementById('dLandmarks').textContent= '0';
-        document.getElementById('dConf').textContent     = '--';
-
-        // Рисуем подсказку
-        ctx.fillStyle = 'rgba(255,100,0,0.15)';
-        ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = '#ff9900';
-        ctx.font = 'bold 14px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText('Лицо не найдено', W/2, H/2-10);
-        ctx.font = '11px Courier New';
-        ctx.fillStyle = '#ff6600';
-        ctx.fillText('Смотрите прямо в камеру', W/2, H/2+10);
-        ctx.fillText('Хорошее освещение спереди', W/2, H/2+28);
-        ctx.textAlign = 'left';
-
-        setStatus('noface','Лицо не найдено — смотрите в камеру');
+// Тест 2: создаём объект БЕЗ initialize
+async function test2() {
+    L('=== ТЕСТ 2: создание объекта ===');
+    
+    if (typeof FaceMesh === 'undefined') {
+        L('FaceMesh не загружен — сначала тест 1', 'err');
         return;
     }
-
-    // Лицо найдено!
-    D.faceCount++;
-    const landmarks = results.multiFaceLandmarks[0];
-
-    document.getElementById('dFaces').textContent    = results.multiFaceLandmarks.length;
-    document.getElementById('dFaces').className      = 'diag-value ok';
-    document.getElementById('dLandmarks').textContent= landmarks.length;
-    document.getElementById('dLandmarks').className  = 'diag-value ok';
-
-    // Уверенность (если есть)
-    if (results.multiFaceGeometry) {
-        document.getElementById('dConf').textContent = 'есть геометрия';
-    } else {
-        document.getElementById('dConf').textContent = `кадр #${D.faceCount}`;
-        document.getElementById('dConf').className   = 'diag-value ok';
+    
+    try {
+        L('Создаём FaceMesh...', 'wait');
+        const fm = new FaceMesh({
+            locateFile: (f) => {
+                L('locateFile запрос: ' + f, 'info');
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${f}`;
+            }
+        });
+        L('✓ Объект создан', 'ok');
+        
+        fm.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: false,
+            minDetectionConfidence: 0.3,
+            minTrackingConfidence: 0.3,
+        });
+        L('✓ Опции установлены', 'ok');
+        
+        fm.onResults((r) => {
+            L('onResults вызван! Лиц: ' + 
+              (r.multiFaceLandmarks?.length || 0), 'ok');
+        });
+        L('✓ Callback установлен', 'ok');
+        
+        window._fm = fm;
+        L('Объект сохранён в window._fm', 'info');
+        L('→ Теперь нажмите тест 3', 'wait');
+        
+    } catch(e) {
+        L('✗ Ошибка: ' + e.message, 'err');
+        L('Stack: ' + e.stack, 'err');
     }
+}
 
-    setStatus('found',`✓ Лицо найдено | ${landmarks.length} точек | FPS:${D.fps}`);
-
-    // Рисуем ВСЕ точки лица
-    ctx.fillStyle = 'rgba(0,255,136,0.6)';
-    landmarks.forEach((p,i) => {
-        ctx.beginPath();
-        ctx.arc(p.x*W, p.y*H, 1.5, 0, Math.PI*2);
-        ctx.fill();
-    });
-
-    // Рисуем ключевые зоны и подписываем
-    drawZone(ctx, landmarks, W, H,
-        [10,151,9,8,107,66,105,104,103,67,109,338,297,332,333,334,296,336],
-        '#00ff88', 'ЛОБ');
-
-    drawZone(ctx, landmarks, W, H,
-        [234,227,116,111,117,118,119,120,121,128,126,142,36,205],
-        '#4488ff', 'ЩЕКА Л');
-
-    drawZone(ctx, landmarks, W, H,
-        [454,447,345,340,346,347,348,349,350,357,355,371,266,425],
-        '#ff6600', 'ЩЕКА П');
-
-    // Носовая точка (центр)
-    const nose = landmarks[4];
-    if (nose) {
-        ctx.beginPath();
-        ctx.arc(nose.x*W, nose.y*H, 5, 0, Math.PI*2);
-        ctx.fillStyle='#ffff00';
-        ctx.fill();
-        ctx.fillStyle='#000';
-        ctx.font='9px Courier New';
-        ctx.fillText('нос', nose.x*W+7, nose.y*H+4);
+// Тест 3: пробуем initialize с таймаутом
+async function test3() {
+    L('=== ТЕСТ 3: initialize() с таймаутом 15 сек ===');
+    
+    if (!window._fm) {
+        L('Сначала запустите тест 2', 'err');
+        return;
     }
-
-    // Периодически логируем координаты ключевых точек
-    if (D.faceCount % 30 === 1) {
-        const p10 = landmarks[10];
-        const p152= landmarks[152];
-        if (p10 && p152) {
-            log('ok',`Лоб[10]: x=${p10.x.toFixed(3)} y=${p10.y.toFixed(3)}`);
-            log('ok',`Подб[152]: x=${p152.x.toFixed(3)} y=${p152.y.toFixed(3)}`);
+    
+    L('Запускаем initialize() — ждём до 15 сек...', 'wait');
+    
+    try {
+        const result = await Promise.race([
+            window._fm.initialize(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Таймаут 15 сек')), 15000)
+            )
+        ]);
+        L('✓ initialize() завершён!', 'ok');
+        L('Теперь можно использовать FaceMesh', 'ok');
+        
+    } catch(e) {
+        L('✗ ' + e.message, 'err');
+        if (e.message.includes('Таймаут')) {
+            L('initialize() завис — проблема с CDN или WASM', 'err');
+            L('Попробуем альтернативный CDN...', 'wait');
+            await tryAlternative();
         }
     }
 }
 
-function drawZone(ctx, landmarks, W, H, ids, color, label) {
-    let minX=1,minY=1,maxX=0,maxY=0;
-    ids.forEach(id=>{
-        const p=landmarks[id];
-        if(!p) return;
-        if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
-        if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+async function tryAlternative() {
+    L('Пробуем unpkg.com...', 'wait');
+    try {
+        // Удаляем старый скрипт
+        document.querySelectorAll('script[data-mp]').forEach(s=>s.remove());
+        
+        await loadScript(
+            'https://unpkg.com/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js',
+            'data-mp'
+        );
+        L('✓ Скрипт с unpkg загружен', 'ok');
+        L('typeof FaceMesh = ' + typeof FaceMesh,
+          typeof FaceMesh !== 'undefined' ? 'ok' : 'err');
+    } catch(e) {
+        L('✗ unpkg тоже не работает: ' + e.message, 'err');
+        L('→ Проблема в сети или блокировке CDN', 'err');
+        checkNetwork();
+    }
+}
+
+async function checkNetwork() {
+    L('=== Проверка сети ===', 'wait');
+    
+    const urls = [
+        'https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js',
+        'https://unpkg.com/react@18/umd/react.production.min.js',
+    ];
+    
+    for (const url of urls) {
+        try {
+            const r = await fetch(url, {method:'HEAD', mode:'no-cors'});
+            L('✓ CDN доступен: ' + new URL(url).hostname, 'ok');
+        } catch(e) {
+            L('✗ CDN недоступен: ' + new URL(url).hostname, 'err');
+        }
+    }
+    
+    // Проверяем конкретный файл MP
+    L('Проверяем файл WASM...', 'wait');
+    try {
+        const r = await fetch(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh_solution_simd_wasm_bin.wasm',
+            { method: 'HEAD' }
+        );
+        L(`WASM файл: ${r.status} ${r.statusText}`, r.ok?'ok':'err');
+        L(`Content-Length: ${r.headers.get('content-length')} байт`, 'info');
+    } catch(e) {
+        L('✗ WASM недоступен: ' + e.message, 'err');
+    }
+}
+
+function loadScript(src, attr) {
+    return new Promise((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = src;
+        if (attr) s.setAttribute(attr, '');
+        s.onload  = resolve;
+        s.onerror = () => reject(new Error('Не удалось загрузить: ' + src));
+        document.head.appendChild(s);
+        // Таймаут на загрузку скрипта
+        setTimeout(() => reject(new Error('Таймаут загрузки скрипта')), 10000);
     });
-    const rx=minX*W, ry=minY*H;
-    const rw=(maxX-minX)*W, rh=(maxY-minY)*H;
-
-    ctx.strokeStyle=color;
-    ctx.lineWidth=2;
-    ctx.shadowColor=color; ctx.shadowBlur=8;
-    ctx.strokeRect(rx,ry,rw,rh);
-    ctx.shadowBlur=0;
-
-    ctx.fillStyle=color.replace('#','rgba(').replace(/([0-9a-f]{2})/gi,
-        (m,h)=>parseInt(h,16)+',').slice(0,-1)+',0.08)';
-    // Простая заливка
-    ctx.globalAlpha=0.1;
-    ctx.fillStyle=color;
-    ctx.fillRect(rx,ry,rw,rh);
-    ctx.globalAlpha=1.0;
-
-    // Метка
-    ctx.fillStyle=color;
-    ctx.font='bold 10px Courier New';
-    ctx.fillText(label, rx+2, ry-3);
 }
 
-// ================================================================
-//  БАЗОВЫЙ РЕЖИМ (без MediaPipe)
-// ================================================================
-function basicFrame(ts) {
-    D.frameCount++;
-    D.fpsCount++;
-    if (ts - D.fpsTimer >= 1000) {
-        D.fps=D.fpsCount; D.fpsCount=0; D.fpsTimer=ts;
-    }
-    document.getElementById('dFPS').textContent=`${D.fps} / ${D.frameCount}`;
-
-    const video  = document.getElementById('videoEl');
-    const canvas = document.getElementById('drawCanvas');
-    const ctx    = canvas.getContext('2d');
-    const W=canvas.offsetWidth||360, H=canvas.offsetHeight||300;
-    canvas.width=W; canvas.height=H;
-    ctx.clearRect(0,0,W,H);
-
-    ctx.strokeStyle='#ff9900'; ctx.lineWidth=2;
-    ctx.shadowColor='#ff9900'; ctx.shadowBlur=8;
-    ctx.strokeRect(W*0.25, H*0.05, W*0.50, H*0.30);
-    ctx.shadowBlur=0;
-    ctx.fillStyle='#ff9900'; ctx.font='10px Courier New';
-    ctx.textAlign='center';
-    ctx.fillText('ЛОБ (базовый режим)', W*0.5, H*0.05-3);
-    ctx.textAlign='left';
-
-    setStatus('noface','Базовый режим — MediaPipe недоступен');
-    document.getElementById('dMPStatus').textContent='не загружен';
-    document.getElementById('dMPStatus').className='diag-value warn';
-
-    if (D.stream) requestAnimationFrame(basicFrame);
-}
-
-// ================================================================
-//  UI ХЕЛПЕРЫ
-// ================================================================
-function setStatus(type, text) {
-    const el = document.getElementById('mainStatus');
-    el.className = 'main-status '+type;
-    el.textContent = text;
-}
-
-function setLoad(iconId, textId, state, text) {
-    const icons = { done:'✅', fail:'❌', wait:'🔄' };
-    document.getElementById(iconId).textContent = icons[state] || '⏳';
-    const el = document.getElementById(textId);
-    el.textContent = text;
-    el.className   = 'load-text ' + (state==='done'?'done':state==='fail'?'fail':'wait');
-}
-
-let logCount = 0;
-function log(type, msg) {
-    logCount++;
-    const box  = document.getElementById('logBox');
-    const time = new Date().toTimeString().slice(0,8);
-    const row  = document.createElement('div');
-    row.className = 'log-r';
-    row.innerHTML = `
-        <span class="log-t">${time}</span>
-        <span class="log-m ${type}">${msg}</span>`;
-    box.insertBefore(row, box.firstChild);
-    if (logCount > 100) {
-        box.removeChild(box.lastChild);
-    }
-}
+L('Страница загружена. Нажмите кнопки по порядку: 1 → 2 → 3', 'ok');
 </script>
 </body>
 </html>
