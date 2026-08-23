@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>rPPG v8 — Честный</title>
+<title>rPPG v8.1 — Честный (исправленный)</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{margin:0;padding:0;box-sizing:border-box}
 body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:8px;overflow-x:hidden}
 h1{font-size:1.15rem;color:#38bdf8}
 .sub{font-size:.68rem;color:#6b7280;margin-bottom:6px;text-align:center}
@@ -18,7 +18,8 @@ video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 .cd .t{font-size:.58rem;color:#9ca3af;text-transform:uppercase}
 .cd .v{font-size:1.7rem;font-weight:800;color:#38bdf8;margin:1px 0}
 .cd .u{font-size:.58rem;color:#6b7280}
-.cd.st .v{color:#f87171}.cd.hr .v{color:#4ade80}
+.cd.st .v{color:#f87171}
+.cd.hr .v{color:#4ade80}
 .hb{text-align:center;padding:4px}
 .heart{font-size:2.2rem;display:inline-block;opacity:.15;transform:scale(1);transition:transform .06s,opacity .06s}
 .heart.beat{opacity:1;transform:scale(1.3);filter:drop-shadow(0 0 12px #ef4444)}
@@ -32,12 +33,13 @@ canvas.gc{width:100%;height:100px;background:#111827;border:1px solid #1e293b;bo
 .ctr{margin-top:6px;display:flex;gap:8px}
 button{background:#0284c7;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.8rem}
 button.off{background:#dc2626}
-.warn{color:#f59e0b;font-size:.65rem;text-align:center;margin-top:4px;max-width:580px}
+.warn{color:#f59e0b;font-size:.62rem;text-align:center;margin-top:4px;max-width:580px;line-height:1.3}
+.dbg{width:100%;max-width:580px;margin-top:4px;font-size:.6rem;color:#444;font-family:monospace;background:#0a0a15;padding:4px 8px;border-radius:4px;max-height:60px;overflow-y:auto}
 </style>
 </head>
 <body>
-<h1>🫀 rPPG v8 — Честный пульс</h1>
-<div class="sub">Без интерполяции · Без фейковых ударов · Только реальные пики</div>
+<h1>🫀 rPPG v8.1 — Честный пульс</h1>
+<div class="sub">Без интерполяции · Только реальные пики · Dual-ROI</div>
 
 <div class="row">
  <div class="cam">
@@ -45,7 +47,7 @@ button.off{background:#dc2626}
   <canvas id="ov" width="340" height="255"></canvas>
  </div>
  <div class="cards">
-  <div class="cd"><div class="t">❤️ Пульс</div><div class="v" id="vB">--</div><div class="u">BPM (реальный)</div></div>
+  <div class="cd"><div class="t">❤️ Пульс</div><div class="v" id="vB">--</div><div class="u">BPM</div></div>
   <div class="cd hb"><span class="heart" id="hrt">❤️</span><div class="bi" id="bi">Ожидание...</div></div>
   <div class="cd hr"><div class="t">HRV</div><div class="v" id="vH">--</div><div class="u">RMSSD мс</div></div>
   <div class="cd st"><div class="t">Стресс</div><div class="v" id="vS">--</div><div class="u">0–100</div></div>
@@ -53,7 +55,7 @@ button.off{background:#dc2626}
 </div>
 
 <div class="sb">
- <div><span class="dot" id="dot"></span><span id="stT">Старт</span></div>
+ <div><span class="dot" id="dot"></span><span id="stT">Нажмите Старт</span></div>
  <div><span id="fpL" style="color:#555"></span> <span id="ampL" style="color:#555"></span></div>
 </div>
 
@@ -66,126 +68,136 @@ button.off{background:#dc2626}
  <button id="bOn">▶ Старт</button>
  <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
 </div>
-<div class="warn">⚠ Эта версия НЕ интерполирует удары. Если пульс не определяется — значит, сигнала недостаточно. Держите телефон неподвижно, свет на лицо.</div>
+<div class="warn">⚠ Без интерполяции. Если пульс не определяется — значит сигнала недостаточно. Держите телефон неподвижно, свет на лицо, лоб открыт.</div>
+<div class="dbg" id="dbg"></div>
 
 <script>
-// =========================================================================
-//  v8 — ЧЕСТНЫЙ rPPG
-//  Принципы:
-//  1. Никакой интерполяции — только реальные пики
-//  2. IIR считается ОДИН раз (не пересчитывается!)
-//  3. Прогрев 5 секунд перед детекцией
-//  4. Проверка амплитуды сигнала
-//  5. Простой зелёный канал с Dual-ROI нормализацией
-// =========================================================================
-
-const W=340,H=255;
+const W=340, H=255;
 const FACE={x:.22,y:.10,w:.56,h:.50};
 const BG_ROIS=[
- {x:.01,y:.01,w:.12,h:.12},{x:.87,y:.01,w:.12,h:.12},
- {x:.01,y:.87,w:.12,h:.12},{x:.87,y:.87,w:.12,h:.12}
+ {x:.01,y:.01,w:.12,h:.12},
+ {x:.87,y:.01,w:.12,h:.12},
+ {x:.01,y:.87,w:.12,h:.12},
+ {x:.87,y:.87,w:.12,h:.12}
 ];
 
-const BPM_LO=45,BPM_HI=180;
-const IBI_MIN=333,IBI_MAX=1333;
-const WARMUP_SEC=5;        // 5 секунд прогрева!
-const MIN_AMP=0.003;       // Минимальная амплитуда нормализованного сигнала
-const Z_THRESH=1.5;        // Строгий z-score порог
-const REFR_MS=400;         // Рефрактерный период 400мс
+const BPM_LO=44, BPM_HI=185;
+const IBI_MIN=324, IBI_MAX=1364;
+const WARMUP_FRAMES=90;      // ~3 сек прогрева фильтра
+const CALIB_FRAMES=60;       // ~2 сек калибровки статистики после прогрева
+const MIN_AMP=0.0003;        // Очень низкий порог — для слабых камер
+const Z_THRESH=1.4;
+const REFR_MS=380;
 
-let on=false,stm=null,raf=null;
-let greenNorm=[],rawT=[];
+let on=false, stm=null, raf=null;
+let greenNorm=[], rawT=[];
 let filtSig=[];
-let sBPM=NaN,sHRV=NaN,lastVBPM=NaN,lastVT=0;
-let fc=0,ft0=0,fps=25;
+let sBPM=NaN, sHRV=NaN, lastVBPM=NaN, lastVT=0;
 let pSkinG=NaN;
-let realIBIs=[],beatTs=[];
+let realIBIs=[], beatTs=[];
 let hrtTmr=null;
 
-// IIR — считается ОДИН раз
-let iirHP={x1:0,x2:0,y1:0,y2:0};
-let iirLP={x1:0,x2:0,y1:0,y2:0};
-let cHP=null,cLP=null;
-let iirInit=false;
-let iirWarmup=0; // счётчик прогрева фильтра
+// IIR
+let iirHP, iirLP, cHP, cLP;
+let frameNum=0;
 
 // Z-score
-let zMean=0,zVar=0,zN=0;
+let zMean=0, zVar=0;
 let lastPkT=0;
-
-// Амплитуда сигнала (для проверки)
 let sigAmp=0;
+let totalBeats=0, rejectedBeats=0;
 
-// Статистика
-let totalBeats=0,rejectedBeats=0;
+// FPS
+let fpsFrames=0, fpsT0=0, fps=25;
 
+// DOM
 const vid=document.getElementById('vid');
 const ov=document.getElementById('ov');
 const co=ov.getContext('2d');
-const bOn=document.getElementById('bOn'),bOff=document.getElementById('bOff');
-const stT=document.getElementById('stT'),dot=document.getElementById('dot');
-const fpL=document.getElementById('fpL'),ampL=document.getElementById('ampL');
-const vB=document.getElementById('vB'),vH=document.getElementById('vH'),vS=document.getElementById('vS');
-const hrt=document.getElementById('hrt'),bi=document.getElementById('bi');
-const cP=document.getElementById('cP'),xP=cP.getContext('2d');
-const cR=document.getElementById('cR'),xR=cR.getContext('2d');
-const hc=document.createElement('canvas');hc.width=W;hc.height=H;
+const bOn=document.getElementById('bOn'), bOff=document.getElementById('bOff');
+const stT=document.getElementById('stT'), dot=document.getElementById('dot');
+const fpL=document.getElementById('fpL'), ampL=document.getElementById('ampL');
+const vB=document.getElementById('vB'), vH=document.getElementById('vH'), vS=document.getElementById('vS');
+const hrt=document.getElementById('hrt'), bi=document.getElementById('bi');
+const cP=document.getElementById('cP'), xP=cP.getContext('2d');
+const cR=document.getElementById('cR'), xR=cR.getContext('2d');
+const dbg=document.getElementById('dbg');
+const hc=document.createElement('canvas');
+hc.width=W; hc.height=H;
 const hx=hc.getContext('2d',{willReadFrequently:true});
 
-bOn.onclick=startApp;bOff.onclick=stopApp;
+function log(s){
+ const t=new Date();
+ const ts=t.getMinutes()+':'+String(t.getSeconds()).padStart(2,'0');
+ dbg.textContent=`[${ts}] ${s}\n`+dbg.textContent;
+ if(dbg.textContent.length>2000) dbg.textContent=dbg.textContent.slice(0,2000);
+}
+
+bOn.onclick=startApp;
+bOff.onclick=stopApp;
 
 async function startApp(){
  try{
+  log('Запрос камеры...');
   stm=await navigator.mediaDevices.getUserMedia({
    video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false
   });
-  vid.srcObject=stm;await vid.play();
-  resetAll();on=true;
+  vid.srcObject=stm;
+  await vid.play();
+  log('Камера запущена');
+  resetAll();
+  on=true;
   bOn.style.display='none';bOff.style.display='';
-  ft0=performance.now();fc=0;
   loop();
- }catch(e){alert('Камера: '+e.message)}
+ }catch(e){
+  log('ОШИБКА: '+e.message);
+  alert('Камера: '+e.message);
+ }
 }
 
 function stopApp(){
- on=false;if(raf)cancelAnimationFrame(raf);
- if(stm)stm.getTracks().forEach(t=>t.stop());
- vid.srcObject=null;bOn.style.display='';bOff.style.display='none';
- stT.textContent='Стоп';dot.className='dot';
+ on=false;
+ // НЕ делаем cancelAnimationFrame — просто ставим флаг, цикл сам остановится
+ setTimeout(()=>{
+  if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
+  vid.srcObject=null;
+  bOn.style.display='';bOff.style.display='none';
+  stT.textContent='Остановлено';dot.className='dot';
+  log('Остановлено');
+ },100);
 }
 
 function resetAll(){
  greenNorm=[];rawT=[];filtSig=[];
  sBPM=NaN;sHRV=NaN;lastVBPM=NaN;lastVT=0;
  pSkinG=NaN;realIBIs=[];beatTs=[];
- zMean=0;zVar=0;zN=0;lastPkT=0;
- iirInit=false;iirWarmup=0;sigAmp=0;
+ zMean=0;zVar=0;lastPkT=0;sigAmp=0;
  totalBeats=0;rejectedBeats=0;
+ frameNum=0;fpsFrames=0;fpsT0=performance.now();fps=25;
  vB.textContent='--';vH.textContent='--';vS.textContent='--';
  bi.textContent='Ожидание...';
+
+ // Инициализируем IIR СРАЗУ с предполагаемым FPS=25
+ initIIR(25);
+ log('Буферы сброшены, IIR инициализирован (25fps)');
 }
 
 // =========================================================================
-//  IIR BUTTERWORTH — ИНИЦИАЛИЗАЦИЯ ОДИН РАЗ
+//  IIR BUTTERWORTH 2nd ORDER — инициализация ОДИН раз
 // =========================================================================
 function initIIR(fs){
- if(iirInit)return; // НЕ пересчитываем!
- const makeHP=(fc,fs)=>{
+ function makeCoeffs(fc,fs,type){
   const w0=Math.tan(Math.PI*fc/fs),w2=w0*w0,sq=Math.SQRT2,k=1+sq*w0+w2;
-  return{b0:1/k,b1:-2/k,b2:1/k,a1:2*(w2-1)/k,a2:(1-sq*w0+w2)/k};
- };
- const makeLP=(fc,fs)=>{
-  const w0=Math.tan(Math.PI*fc/fs),w2=w0*w0,sq=Math.SQRT2,k=1+sq*w0+w2;
+  if(type==='hp') return{b0:1/k,b1:-2/k,b2:1/k,a1:2*(w2-1)/k,a2:(1-sq*w0+w2)/k};
   return{b0:w2/k,b1:2*w2/k,b2:w2/k,a1:2*(w2-1)/k,a2:(1-sq*w0+w2)/k};
- };
- cHP=makeHP(.7,fs);
- cLP=makeLP(3.0,fs);
+ }
+ cHP=makeCoeffs(0.7,fs,'hp');
+ cLP=makeCoeffs(3.0,fs,'lp');
  iirHP={x1:0,x2:0,y1:0,y2:0};
  iirLP={x1:0,x2:0,y1:0,y2:0};
- iirInit=true;
 }
 
-function iir(x,st,c){
+function iirFilt(x,st,c){
  const y=c.b0*x+c.b1*st.x1+c.b2*st.x2-c.a1*st.y1-c.a2*st.y2;
  st.x2=st.x1;st.x1=x;st.y2=st.y1;st.y1=y;return y;
 }
@@ -193,218 +205,276 @@ function iir(x,st,c){
 // =========================================================================
 //  ГЛАВНЫЙ ЦИКЛ
 // =========================================================================
-let startTime=0;
-
 function loop(){
- if(!on)return;
+ if(!on){return} // Просто выходим, не ставим новый RAF
+
  try{
   const now=performance.now();
-  if(!startTime)startTime=now;
-  const elapsed=(now-startTime)/1000;
+  frameNum++;
+  fpsFrames++;
 
-  fc++;
-  if(now-ft0>2000){
-   fps=Math.max(8,fc/((now-ft0)/1000));
-   fc=0;ft0=now;
+  // FPS каждые 3 секунды
+  if(now-fpsT0>3000 && fpsFrames>10){
+   fps=fpsFrames/((now-fpsT0)/1000);
    fpL.textContent=fps.toFixed(0)+'fps';
-   // Инициализируем IIR один раз, когда FPS стабилизировался
-   if(!iirInit && elapsed>2) initIIR(fps);
-  }
+   fpsFrames=0;fpsT0=now;
 
-  if(!iirInit){
-   stT.textContent='Стабилизация камеры...';dot.className='dot w';
-   raf=requestAnimationFrame(loop);return;
+   // Если реальный FPS сильно отличается от 25 и это первый пересчёт — обновить IIR
+   if(frameNum<200 && Math.abs(fps-25)>5){
+    initIIR(fps);
+    log('IIR пересчитан для '+fps.toFixed(0)+'fps');
+   }
   }
 
   hx.drawImage(vid,0,0,W,H);
   const px=hx.getImageData(0,0,W,H).data;
 
-  // Фон (углы)
+  // ===== ФОН (4 угла) =====
   let bgG=0,bgN=0;
   for(const roi of BG_ROIS){
    const rx=Math.floor(W*roi.x),ry=Math.floor(H*roi.y);
    const rw=Math.floor(W*roi.w),rh=Math.floor(H*roi.h);
    let s=0,c=0;
-   for(let y=ry;y<ry+rh;y+=2)for(let x=rx;x<rx+rw;x+=2){
-    s+=px[(y*W+x)*4+1];c++;
+   for(let y=ry;y<ry+rh;y+=2){
+    for(let x=rx;x<rx+rw;x+=2){
+     s+=px[(y*W+x)*4+1]; c++;
+    }
    }
    if(c>0){bgG+=s/c;bgN++}
   }
   bgG=bgN>0?bgG/bgN:128;
 
-  // Кожа лица (зелёный канал)
+  // ===== КОЖА ЛИЦА =====
   const fx=Math.floor(W*FACE.x),fy=Math.floor(H*FACE.y);
   const fw=Math.floor(W*FACE.w),fh=Math.floor(H*FACE.h);
-  let skinG=0,skinC=0;
-  for(let y=fy;y<fy+fh;y+=2)for(let x=fx;x<fx+fw;x+=2){
-   const i=(y*W+x)*4;
-   const r=px[i],g=px[i+1],b=px[i+2];
-   if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
-    skinG+=g;skinC++;
+  let skinG=0,skinR=0,skinB=0,skinC=0,totalC=0;
+  for(let y=fy;y<fy+fh;y+=2){
+   for(let x=fx;x<fx+fw;x+=2){
+    totalC++;
+    const i=(y*W+x)*4;
+    const r=px[i],g=px[i+1],b=px[i+2];
+    // Фильтр кожи
+    if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
+     const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+     if(mx-mn>6){
+      let hue=0;const d=mx-mn;
+      if(mx===r)hue=60*((g-b)/d%6);
+      else if(mx===g)hue=60*((b-r)/d+2);
+      else hue=60*((r-g)/d+4);
+      if(hue<0)hue+=360;
+      if(hue<=55||hue>=335){
+       skinG+=g;skinR+=r;skinB+=b;skinC++;
+      }
+     }
+    }
    }
   }
-  const skinOk=skinC/(Math.floor(fw/2)*Math.floor(fh/2))>.25;
-  const avgSkinG=skinC>0?skinG/skinC:0;
 
-  drawROI(skinOk,skinC,bgN);
+  const skinRatio=skinC/Math.max(totalC,1);
+  const skinOk=skinRatio>.20;
+  const avgG=skinC>0?skinG/skinC:0;
+
+  // ===== РИСУЕМ ROI ВСЕГДА =====
+  drawROI(fx,fy,fw,fh,skinOk,skinRatio);
 
   if(!skinOk){
-   stT.textContent='⚠ Лицо не найдено';dot.className='dot';
-   showHeld(now);
-  }else{
-   // Motion
-   if(!isNaN(pSkinG)&&Math.abs(avgSkinG-pSkinG)>4){
-    pSkinG=avgSkinG;stT.textContent='🔄 Движение...';dot.className='dot w';
-    showHeld(now);throw'skip';
+   stT.textContent='⚠ Направьте лицо в зелёную рамку';
+   dot.className='dot';
+   if(frameNum%60===0) log('Кожа не найдена ('+Math.round(skinRatio*100)+'%)');
+  }
+  else{
+   // Motion check
+   if(!isNaN(pSkinG)){
+    const d=Math.abs(avgG-pSkinG);
+    if(d>4.5){
+     pSkinG=avgG;
+     stT.textContent='🔄 Движение — замрите!';
+     dot.className='dot w';
+     // Не выходим! Продолжаем, просто пропускаем этот кадр для детекции
+     raf=requestAnimationFrame(loop);
+     return;
+    }
    }
-   pSkinG=avgSkinG;
+   pSkinG=avgG;
 
-   // DUAL-ROI: нормализованный зелёный
-   const gn=bgG>10?avgSkinG/bgG:1;
+   // Dual-ROI нормализация
+   const gn=bgG>10?avgG/bgG:avgG/128;
    greenNorm.push(gn);
    rawT.push(now);
-   const mx=Math.floor(fps*12);
-   while(greenNorm.length>mx){greenNorm.shift();rawT.shift()}
+   const maxBuf=Math.floor(fps*12);
+   while(greenNorm.length>maxBuf){greenNorm.shift();rawT.shift()}
 
-   // IIR полосовой (инкрементально)
-   const hp=iir(gn,iirHP,cHP);
-   const bp=iir(hp,iirLP,cLP);
+   // IIR полосовой
+   const hp=iirFilt(gn,iirHP,cHP);
+   const bp=iirFilt(hp,iirLP,cLP);
    filtSig.push(bp);
-   if(filtSig.length>mx)filtSig.shift();
+   if(filtSig.length>maxBuf) filtSig.shift();
 
-   // Прогрев фильтра (первые 3 сек после инициализации)
-   iirWarmup++;
-   if(iirWarmup<fps*3){
-    stT.textContent=`Прогрев фильтра... ${Math.round(iirWarmup/(fps*3)*100)}%`;
+   // Фазы работы
+   if(frameNum<WARMUP_FRAMES){
+    // Прогрев IIR (переходный процесс)
+    const pct=Math.round(frameNum/WARMUP_FRAMES*100);
+    stT.textContent=`Прогрев фильтра: ${pct}%`;
     dot.className='dot w';
    }
-   // Прогрев детектора (5 сек от старта)
-   else if(elapsed<WARMUP_SEC){
-    // Накапливаем статистику, но не детектируем
-    const a=0.02;
+   else if(frameNum<WARMUP_FRAMES+CALIB_FRAMES){
+    // Калибровка статистики
+    const a=0.05;
     zMean=zMean*(1-a)+bp*a;
     zVar=zVar*(1-a)+(bp-zMean)**2*a;
-    stT.textContent=`Калибровка... ${Math.round(elapsed/WARMUP_SEC*100)}% (замрите!)`;
+    const pct=Math.round((frameNum-WARMUP_FRAMES)/CALIB_FRAMES*100);
+    stT.textContent=`Калибровка: ${pct}% (замрите!)`;
     dot.className='dot w';
+    if(frameNum===WARMUP_FRAMES+CALIB_FRAMES-1){
+     log('Калибровка OK. zMean='+zMean.toFixed(6)+' zStd='+Math.sqrt(zVar).toFixed(6));
+    }
    }
    else{
-    // РЕАЛЬНАЯ ДЕТЕКЦИЯ
-    detectPeak(bp,now);
-    updateBPM(now);
+    // РАБОЧИЙ РЕЖИМ
+    processSignal(bp,now);
    }
   }
 
-  if(fc%2===0){drawPPG(now);drawRaw()}
+  // Графики каждые 3 кадра
+  if(frameNum%3===0){
+   drawPPG(now);
+   drawRaw();
+  }
 
- }catch(e){if(e!=='skip')console.error(e)}
- finally{raf=requestAnimationFrame(loop)}
+ }catch(e){
+  log('ERR: '+e.message);
+  console.error(e);
+ }
+
+ raf=requestAnimationFrame(loop);
 }
 
 // =========================================================================
-//  ЧЕСТНЫЙ ПИКОВЫЙ ДЕТЕКТОР
-//  Никакой интерполяции! Только реальные пики.
+//  ОБРАБОТКА СИГНАЛА + ДЕТЕКЦИЯ ПИКОВ
 // =========================================================================
-function detectPeak(val,now){
- // Обновляем скользящее среднее и дисперсию
- const a=0.01;
+function processSignal(val, now){
+ // Обновляем статистику (медленно)
+ const a=0.008;
  zMean=zMean*(1-a)+val*a;
  zVar=zVar*(1-a)+(val-zMean)**2*a;
- const zStd=Math.sqrt(Math.max(zVar,1e-10));
+ const zStd=Math.sqrt(Math.max(zVar,1e-14));
 
- // Амплитуда сигнала (для проверки качества)
- sigAmp=sigAmp*.99+zStd*.01;
- ampL.textContent='A:'+sigAmp.toFixed(4);
+ // Амплитуда
+ sigAmp=sigAmp*.995+zStd*.005;
+ ampL.textContent='amp:'+sigAmp.toExponential(2);
 
- // Если амплитуда слишком мала — нет пульсового сигнала
+ // Проверка: есть ли вообще сигнал?
  if(sigAmp<MIN_AMP){
-  stT.textContent=`⚠ Сигнал слишком слабый (A=${sigAmp.toFixed(4)})`;
+  stT.textContent=`⏳ Сигнал слабый — замрите, свет на лицо`;
   dot.className='dot w';
   return;
  }
 
+ // Z-score
  const z=(val-zMean)/zStd;
 
- // Пик: z > порога И рефрактерный период прошёл
+ // Пик: z > порога, рефрактерный период, локальный максимум
  if(z>Z_THRESH && (now-lastPkT)>REFR_MS){
-  // Проверка локального максимума (3 точки)
   const n=filtSig.length;
-  if(n>=4){
-   const v2=filtSig[n-2],v1=filtSig[n-1],v0=val;
-   if(v1>v2 && v1>=v0){
-    // РЕАЛЬНЫЙ УДАР — без интерполяции!
-    const ibi=now-lastPkT;
-    if(ibi>=IBI_MIN && ibi<=IBI_MAX){
+  if(n>=3){
+   // Проверяем что предыдущий отсчёт был выше соседей (он и есть пик)
+   const v0=filtSig[n-3], v1=filtSig[n-2], v2=filtSig[n-1];
+   // Пик = v1 (один кадр назад)
+   if(v1>=v0 && v1>=v2 && v1>zMean+zStd*1.0){
+    // Нашли реальный пик!
+    const ibi=lastPkT>0?(now-lastPkT):0;
+
+    if(lastPkT>0 && ibi>=IBI_MIN && ibi<=IBI_MAX){
      realIBIs.push(ibi);
-     if(realIBIs.length>50)realIBIs.shift();
+     if(realIBIs.length>60) realIBIs.shift();
      totalBeats++;
-    }else{
+     log(`BEAT #${totalBeats}: IBI=${Math.round(ibi)}ms (${Math.round(60000/ibi)} BPM) z=${z.toFixed(1)}`);
+    } else if(lastPkT>0){
      rejectedBeats++;
+     log(`REJECT: IBI=${Math.round(ibi)}ms z=${z.toFixed(1)}`);
     }
+
     lastPkT=now;
     beatTs.push(now);
-    while(beatTs.length>0&&now-beatTs[0]>30000)beatTs.shift();
+    while(beatTs.length>0 && now-beatTs[0]>30000) beatTs.shift();
 
+    // Сердечко
     hrt.classList.add('beat');
-    if(hrtTmr)clearTimeout(hrtTmr);
+    if(hrtTmr) clearTimeout(hrtTmr);
     hrtTmr=setTimeout(()=>hrt.classList.remove('beat'),150);
 
-    if(ibi>=IBI_MIN&&ibi<=IBI_MAX){
-     bi.textContent=`💓 ${Math.round(ibi)}мс (${Math.round(60000/ibi)} BPM)`;
+    if(ibi>=IBI_MIN && ibi<=IBI_MAX){
+     bi.textContent=`💓 IBI: ${Math.round(ibi)}мс → ${Math.round(60000/ibi)} BPM`;
     }
    }
   }
  }
+
+ // Обновление BPM
+ updateBPM(now);
 }
 
 // =========================================================================
-//  BPM — ТОЛЬКО из реальных IBI, без интерполяции
+//  BPM — только из реальных IBI
 // =========================================================================
 function updateBPM(now){
- if(realIBIs.length<4){
-  stT.textContent=`Накопление: ${realIBIs.length}/4 реальных ударов`;
-  dot.className='dot w';return;
+ if(realIBIs.length<3){
+  const needed=3-realIBIs.length;
+  stT.textContent=`Накопление: ещё ${needed} удар(ов)...`;
+  dot.className='dot w';
+  return;
  }
 
- // Медиана IBI (устойчива к выбросам)
- const s=[...realIBIs.slice(-15)].sort((a,b)=>a-b);
+ // Медиана последних 12 IBI
+ const recent=realIBIs.slice(-12);
+ const s=[...recent].sort((a,b)=>a-b);
  const med=s[Math.floor(s.length/2)];
- const bpm=60000/med;
+
+ // Trimmed mean (убираем крайние)
+ const trim=Math.max(1,Math.floor(s.length*.2));
+ const t=s.slice(trim, s.length-trim);
+ if(t.length===0) return;
+ const avg=t.reduce((a,b)=>a+b,0)/t.length;
+ const bpm=60000/avg;
 
  if(bpm<BPM_LO||bpm>BPM_HI){
-  stT.textContent=`⚠ BPM вне диапазона: ${Math.round(bpm)}`;
+  stT.textContent=`⚠ BPM вне диапазона (${Math.round(bpm)})`;
   dot.className='dot w';return;
  }
 
- if(isNaN(sBPM))sBPM=bpm;
+ if(isNaN(sBPM)) sBPM=bpm;
  else{
   const j=Math.abs(bpm-sBPM);
-  const a=j>15?.06:j>8?.10:.08;
-  sBPM=sBPM*(1-a)+bpm*a;
+  const alpha=j>15?.05:j>8?.08:.07;
+  sBPM=sBPM*(1-alpha)+bpm*alpha;
  }
 
  const dbpm=Math.round(sBPM);
- lastVBPM=dbpm;lastVT=now;
- vB.textContent=dbpm;vB.style.opacity='1';
+ lastVBPM=dbpm; lastVT=now;
+ vB.textContent=dbpm;
+ vB.style.opacity='1';
 
  const b10=beatTs.filter(t=>now-t<10000).length;
- stT.textContent=`✅ ${dbpm} BPM · ${b10} ударов/10с · R:${rejectedBeats}`;
+ stT.textContent=`✅ ${dbpm} BPM · ${b10}/10с · beats:${totalBeats} rej:${rejectedBeats}`;
  dot.className='dot ok';
 
  calcHRV(dbpm);
 }
 
 function calcHRV(bpm){
- if(realIBIs.length<6)return;
+ if(realIBIs.length<6) return;
  const s=[...realIBIs.slice(-20)].sort((a,b)=>a-b);
  const med=s[Math.floor(s.length/2)];
- // Чистые IBI (±30% от медианы)
- const clean=realIBIs.filter(i=>i>=med*.7&&i<=med*1.3);
- if(clean.length<5)return;
+ const clean=realIBIs.filter(i=>i>=med*.65&&i<=med*1.35);
+ if(clean.length<5) return;
  let ss=0,cn=0;
- for(let i=1;i<clean.length;i++){const d=clean[i]-clean[i-1];ss+=d*d;cn++}
- if(!cn)return;
+ for(let i=1;i<clean.length;i++){
+  const d=clean[i]-clean[i-1];
+  ss+=d*d;cn++;
+ }
+ if(!cn) return;
  const rmssd=Math.sqrt(ss/cn);
- if(isNaN(sHRV))sHRV=rmssd;else sHRV=sHRV*.85+rmssd*.15;
+ if(isNaN(sHRV)) sHRV=rmssd; else sHRV=sHRV*.85+rmssd*.15;
  const hrv=Math.round(Math.max(5,Math.min(180,sHRV)));
  vH.textContent=hrv;
 
@@ -417,51 +487,75 @@ function calcHRV(bpm){
  vS.textContent=Math.round(Math.max(5,Math.min(98,sb*.35+sh*.65)));
 }
 
-function showHeld(now){
- if(!isNaN(lastVBPM)&&(now-lastVT)<4000){vB.textContent=lastVBPM;vB.style.opacity='.5'}
- else{vB.textContent='--';vB.style.opacity='1'}
-}
-
 // =========================================================================
 //  РИСОВАНИЕ
 // =========================================================================
-function drawROI(skinOk,skinC,bgN){
+function drawROI(fx,fy,fw,fh,skinOk,ratio){
  co.clearRect(0,0,W,H);
- co.fillStyle='rgba(0,0,0,.3)';co.fillRect(0,0,W,H);
- const fx=Math.floor(W*FACE.x),fy=Math.floor(H*FACE.y);
- const fw=Math.floor(W*FACE.w),fh=Math.floor(H*FACE.h);
+ // Затемнение
+ co.fillStyle='rgba(0,0,0,.3)';
+ co.fillRect(0,0,W,H);
  co.clearRect(fx,fy,fw,fh);
- co.strokeStyle=skinOk?'#22c55e':'#ef4444';co.lineWidth=2;co.strokeRect(fx,fy,fw,fh);
- co.strokeStyle='rgba(56,189,248,.4)';co.lineWidth=1;co.setLineDash([3,3]);
+
+ // Рамка лица
+ const cl=skinOk?'#22c55e':'#ef4444';
+ co.strokeStyle=cl;co.lineWidth=2;
+ co.strokeRect(fx,fy,fw,fh);
+
+ // Угловые маркеры
+ const cn=12;
+ co.lineWidth=3;co.strokeStyle=cl;
+ co.beginPath();co.moveTo(fx,fy+cn);co.lineTo(fx,fy);co.lineTo(fx+cn,fy);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy);co.lineTo(fx+fw,fy);co.lineTo(fx+fw,fy+cn);co.stroke();
+ co.beginPath();co.moveTo(fx,fy+fh-cn);co.lineTo(fx,fy+fh);co.lineTo(fx+cn,fy+fh);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy+fh);co.lineTo(fx+fw,fy+fh);co.lineTo(fx+fw,fy+fh-cn);co.stroke();
+
+ // Фон (углы)
+ co.strokeStyle='rgba(56,189,248,.35)';co.lineWidth=1;co.setLineDash([3,3]);
  for(const r of BG_ROIS){
-  const bx=Math.floor(W*r.x),by=Math.floor(H*r.y);
-  co.clearRect(bx,by,Math.floor(W*r.w),Math.floor(H*r.h));
-  co.strokeRect(bx,by,Math.floor(W*r.w),Math.floor(H*r.h));
+  const bx=Math.floor(W*r.x),by=Math.floor(H*r.y),bw=Math.floor(W*r.w),bh=Math.floor(H*r.h);
+  co.clearRect(bx,by,bw,bh);
+  co.strokeRect(bx,by,bw,bh);
  }
  co.setLineDash([]);
+
+ // Подписи
  co.font='bold 10px sans-serif';
- co.fillStyle=skinOk?'#22c55e':'#ef4444';
- co.fillText(skinOk?'✓ Лицо':'✗ Нет',fx+3,fy-3);
+ co.fillStyle=cl;
+ co.fillText(skinOk?`✓ Кожа ${Math.round(ratio*100)}%`:`✗ Нет кожи (${Math.round(ratio*100)}%)`,fx+3,fy-4);
+ co.fillStyle='rgba(56,189,248,.5)';
+ co.font='9px sans-serif';
+ co.fillText('фон',5,10);
 }
 
 function drawPPG(now){
- const w=cP.width=cP.clientWidth*2,h=cP.height=cP.clientHeight*2;
+ const w=cP.width=cP.clientWidth*2, h=cP.height=cP.clientHeight*2;
  xP.clearRect(0,0,w,h);
- if(filtSig.length<4){xP.fillStyle='#4b5563';xP.font='11px sans-serif';xP.fillText('Фильтрованный сигнал...',10,h/2);return}
- const show=Math.min(filtSig.length,Math.floor(fps*6));
- const sl=filtSig.slice(-show);
- let mn=1e9,mx=-1e9;for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
- const rng=mx-mn||1;
 
- // Порог
- const thr=zMean+Math.sqrt(Math.max(zVar,1e-10))*Z_THRESH;
- const thrY=h-((thr-mn)/rng)*(h*.7)-h*.15;
- if(thrY>5&&thrY<h-5){
-  xP.strokeStyle='rgba(239,68,68,.2)';xP.setLineDash([3,3]);
-  xP.beginPath();xP.moveTo(0,thrY);xP.lineTo(w,thrY);xP.stroke();xP.setLineDash([]);
+ if(filtSig.length<10){
+  xP.fillStyle='#4b5563';xP.font='11px sans-serif';
+  xP.fillText('Фильтрованный BVP сигнал...',10,h/2);
+  return;
  }
 
- xP.beginPath();xP.strokeStyle='#38bdf8';xP.lineWidth=2;
+ const show=Math.min(filtSig.length,Math.floor(fps*8));
+ const sl=filtSig.slice(-show);
+ let mn=1e9,mx=-1e9;
+ for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
+ const rng=mx-mn||1;
+
+ // Порог z-score
+ const zStd=Math.sqrt(Math.max(zVar,1e-14));
+ const thr=zMean+zStd*Z_THRESH;
+ const thrY=h-((thr-mn)/rng)*(h*.7)-h*.15;
+ if(thrY>5&&thrY<h-5){
+  xP.strokeStyle='rgba(239,68,68,.15)';xP.lineWidth=1;xP.setLineDash([3,3]);
+  xP.beginPath();xP.moveTo(0,thrY);xP.lineTo(w,thrY);xP.stroke();xP.setLineDash([]);
+  xP.fillStyle='rgba(239,68,68,.3)';xP.font='8px monospace';xP.fillText('z='+Z_THRESH,w-30,thrY-3);
+ }
+
+ // Волна
+ xP.beginPath();xP.strokeStyle='#38bdf8';xP.lineWidth=1.5;
  for(let i=0;i<sl.length;i++){
   const px=i/(sl.length-1)*w;
   const py=h-((sl[i]-mn)/rng)*(h*.7)-h*.15;
@@ -469,28 +563,37 @@ function drawPPG(now){
  }
  xP.stroke();
 
- // Удары
+ // Удары на графике
  const tStart=rawT.length>show?rawT[rawT.length-show]:(rawT[0]||0);
  const tEnd=rawT[rawT.length-1]||now;
  const tR=tEnd-tStart||1;
- xP.fillStyle='#ef4444';
  for(const bt of beatTs){
   if(bt<tStart||bt>tEnd)continue;
   const px=((bt-tStart)/tR)*w;
-  xP.globalAlpha=.2;xP.fillRect(px-1,0,2,h);xP.globalAlpha=1;
+  xP.fillStyle='rgba(239,68,68,.2)';
+  xP.fillRect(px-1,0,2,h);
+  xP.fillStyle='#ef4444';
   xP.beginPath();xP.arc(px,8,3,0,Math.PI*2);xP.fill();
  }
- xP.fillStyle='#555';xP.font='10px monospace';
- xP.fillText(`BVP (filtered) · z>${Z_THRESH} · R:${rejectedBeats}`,6,h-4);
+
+ xP.fillStyle='#555';xP.font='9px monospace';
+ xP.fillText(`BVP filtered · beats:${totalBeats} · amp:${sigAmp.toExponential(1)}`,6,h-3);
 }
 
 function drawRaw(){
- const w=cR.width=cR.clientWidth*2,h=cR.height=cR.clientHeight*2;
+ const w=cR.width=cR.clientWidth*2, h=cR.height=cR.clientHeight*2;
  xR.clearRect(0,0,w,h);
- if(greenNorm.length<4){xR.fillStyle='#4b5563';xR.font='11px sans-serif';xR.fillText('Сырой сигнал...',10,h/2);return}
- const show=Math.min(greenNorm.length,Math.floor(fps*6));
+
+ if(greenNorm.length<10){
+  xR.fillStyle='#4b5563';xR.font='11px sans-serif';
+  xR.fillText('Сырой G/BG...',10,h/2);
+  return;
+ }
+
+ const show=Math.min(greenNorm.length,Math.floor(fps*8));
  const sl=greenNorm.slice(-show);
- let mn=1e9,mx=-1e9;for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
+ let mn=1e9,mx=-1e9;
+ for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
  const rng=mx-mn||1;
 
  xR.beginPath();xR.strokeStyle='#4ade80';xR.lineWidth=1.5;
@@ -501,15 +604,8 @@ function drawRaw(){
  }
  xR.stroke();
 
- // Линия 1.0 (идеальная нормализация)
- const oneY=h-((1-mn)/rng)*(h*.7)-h*.15;
- if(oneY>0&&oneY<h){
-  xR.strokeStyle='rgba(255,255,255,.1)';xR.setLineDash([2,4]);
-  xR.beginPath();xR.moveTo(0,oneY);xR.lineTo(w,oneY);xR.stroke();xR.setLineDash([]);
- }
-
- xR.fillStyle='#555';xR.font='10px monospace';
- xR.fillText(`Raw G/BG (Dual-ROI) · Amp: ${sigAmp.toFixed(4)} · Min: ${MIN_AMP}`,6,h-4);
+ xR.fillStyle='#555';xR.font='9px monospace';
+ xR.fillText(`Raw G/Background · range: ${(mx-mn).toExponential(2)}`,6,h-3);
 }
 </script>
 </body>
