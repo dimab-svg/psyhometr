@@ -3,60 +3,88 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>rPPG Психометр v4</title>
+<title>rPPG Психометр v5</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#080a12;color:#d1d5db;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;padding:12px}
 h1{font-size:1.4rem;color:#38bdf8;margin-bottom:2px}
-.sub{font-size:.78rem;color:#9ca3af;margin-bottom:12px;text-align:center}
-.row{display:flex;gap:16px;max-width:960px;width:100%;flex-wrap:wrap;justify-content:center}
-.cam{position:relative;width:380px;height:285px;background:#000;border-radius:10px;overflow:hidden;border:2px solid #1e293b}
+.sub{font-size:.76rem;color:#9ca3af;margin-bottom:12px;text-align:center}
+.row{display:flex;gap:16px;max-width:1000px;width:100%;flex-wrap:wrap;justify-content:center}
+.cam{position:relative;width:400px;height:300px;background:#000;border-radius:10px;overflow:hidden;border:2px solid #1e293b}
 video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 #ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
-.cards{display:flex;flex-direction:column;gap:8px;width:240px}
+.cards{display:flex;flex-direction:column;gap:8px;width:250px}
 .cd{background:#111827;border:1px solid #1e293b;padding:10px 14px;border-radius:8px;text-align:center}
 .cd .t{font-size:.68rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em}
-.cd .v{font-size:2rem;font-weight:800;color:#38bdf8;margin:2px 0;transition:color .4s}
+.cd .v{font-size:2rem;font-weight:800;color:#38bdf8;margin:2px 0;transition:color .3s}
 .cd .u{font-size:.68rem;color:#6b7280}
 .cd.st .v{color:#f87171}
 .cd.hr .v{color:#4ade80}
-.cd.cn .v{font-size:1.2rem;color:#fbbf24}
-.sb{width:100%;max-width:640px;background:#111827;border:1px solid #1e293b;padding:7px 12px;border-radius:6px;margin-top:10px;display:flex;align-items:center;justify-content:space-between;font-size:.78rem;flex-wrap:wrap;gap:6px}
+.cd.cn .v{font-size:1.1rem;color:#fbbf24}
+
+/* Пульсирующее сердце */
+.heart-box{text-align:center;padding:8px}
+.heart{font-size:2.8rem;display:inline-block;transition:transform .08s,opacity .08s;opacity:.3;transform:scale(1)}
+.heart.beat{opacity:1;transform:scale(1.25);filter:drop-shadow(0 0 12px #ef4444)}
+
+.sb{width:100%;max-width:680px;background:#111827;border:1px solid #1e293b;padding:7px 12px;border-radius:6px;margin-top:10px;display:flex;align-items:center;justify-content:space-between;font-size:.78rem;flex-wrap:wrap;gap:6px}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ef4444;margin-right:5px;transition:.3s}
 .dot.ok{background:#22c55e;box-shadow:0 0 6px #22c55e}
 .dot.wait{background:#f59e0b;box-shadow:0 0 6px #f59e0b}
 .qm{width:110px;height:7px;background:#1e293b;border-radius:3px;overflow:hidden;display:inline-block}
 .qf{height:100%;width:0%;transition:width .3s,background .3s;border-radius:3px}
-.ch{width:100%;max-width:640px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
-canvas.gc{width:100%;height:105px;background:#111827;border:1px solid #1e293b;border-radius:6px}
+
+.ch{width:100%;max-width:680px;margin-top:8px;display:flex;flex-direction:column;gap:6px}
+canvas.gc{width:100%;height:115px;background:#111827;border:1px solid #1e293b;border-radius:6px}
+
 .ctr{margin-top:10px;display:flex;gap:10px}
 button{background:#0284c7;color:#fff;border:none;padding:9px 20px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.85rem;transition:.2s}
 button:hover{background:#0369a1}
 button.off{background:#dc2626}
 button.off:hover{background:#b91c1c}
-.tip{margin-top:10px;font-size:.7rem;color:#6b7280;max-width:640px;text-align:center;line-height:1.4}
+.tip{margin-top:10px;font-size:.7rem;color:#6b7280;max-width:680px;text-align:center;line-height:1.4}
 </style>
 </head>
 <body>
-<h1>🫀 rPPG Психометр v4</h1>
-<div class="sub">Бесконтактное измерение пульса · Алгоритм POS · Строгая детекция кожи</div>
+<h1>🫀 rPPG Психометр v5</h1>
+<div class="sub">Бесконтактное измерение пульса · POS + Пиковый детектор · Реальные удары</div>
 
 <div class="row">
  <div class="cam">
   <video id="vid" autoplay playsinline muted></video>
-  <canvas id="ov" width="380" height="285"></canvas>
+  <canvas id="ov" width="400" height="300"></canvas>
  </div>
  <div class="cards">
-  <div class="cd"><div class="t">❤️ Пульс</div><div class="v" id="vBPM">--</div><div class="u">BPM</div></div>
-  <div class="cd hr"><div class="t">📊 HRV</div><div class="v" id="vHRV">--</div><div class="u">RMSSD мс</div></div>
-  <div class="cd st"><div class="t">🧠 Стресс</div><div class="v" id="vSTR">--</div><div class="u">0–100</div></div>
-  <div class="cd cn"><div class="t">📡 Качество</div><div class="v" id="vSNR">--</div><div class="u">SNR дБ</div></div>
+  <div class="cd">
+   <div class="t">❤️ Пульс</div>
+   <div class="v" id="vBPM">--</div>
+   <div class="u">BPM</div>
+  </div>
+  <div class="cd heart-box">
+   <span class="heart" id="heartIcon">❤️</span>
+   <div class="u" id="beatInfo">Ожидание ударов...</div>
+  </div>
+  <div class="cd hr">
+   <div class="t">📊 HRV (RMSSD)</div>
+   <div class="v" id="vHRV">--</div>
+   <div class="u">мс</div>
+  </div>
+  <div class="cd st">
+   <div class="t">🧠 Стресс</div>
+   <div class="v" id="vSTR">--</div>
+   <div class="u">0–100</div>
+  </div>
+  <div class="cd cn">
+   <div class="t">📡 Достоверность</div>
+   <div class="v" id="vSNR">--</div>
+   <div class="u"></div>
+  </div>
  </div>
 </div>
 
 <div class="sb">
  <div><span class="dot" id="dot"></span><span id="stTxt">Нажмите Старт</span></div>
- <div>Сигнал: <div class="qm"><div class="qf" id="qBar"></div></div></div>
+ <div>Сигнал: <div class="qm"><div class="qf" id="qBar"></div></div> <span id="fpsT" style="margin-left:6px;color:#6b7280"></span></div>
 </div>
 
 <div class="ch">
@@ -69,41 +97,44 @@ button.off:hover{background:#b91c1c}
  <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
 </div>
 
-<div class="tip">
-💡 Расположите лицо в рамке · Свет спереди · Сидите спокойно · Калибровка 5-8 сек
-</div>
+<div class="tip">💡 Сидите неподвижно лицом к камере · Свет спереди · Калибровка ~6 сек · Сердечко пульсирует в такт реальным ударам</div>
 
 <script>
 // =========================================================================
-//  CONFIG
+//  КОНФИГУРАЦИЯ
 // =========================================================================
 const C = {
- CW: 380, CH: 285,
- ROI: { x: .22, y: .05, w: .56, h: .58 },
- SKIN_MIN_RATIO: .35,
+ CW: 400, CH: 300,
+ ROI: { x:.22, y:.05, w:.56, h:.58 },
+ SKIN_MIN: .35,
  WIN_SEC: 1.6,
  BUF_SEC: 14,
- FLO: .7, FHI: 3.2,
- FBINS: 160,
- SNR_ENTER: 1.5,
- SNR_EXIT: 0.4,
- MOTION_MAX: 3.5,
- BPM_ALPHA: .18,
+ FLO: .7, FHI: 3.3,
+ FBINS: 200,
+ SNR_IN: 1.2, SNR_OUT: .3,
+ MOTION_MAX: 3.8,
+ BPM_ALPHA: .08,
  HOLD_SEC: 3,
+ PEAK_REFRACT_SEC: .35,
 };
 
-// =========================================================================
-//  STATE
-// =========================================================================
-let on = false, stm = null, raf = null;
-let rB=[], gB=[], bB=[], tB=[];
-let ppg=[], iBuf=[];
-let sBPM=NaN, sHRV=NaN, lastValidBPM=NaN, lastValidTime=0;
-let prevR=NaN, prevG=NaN, prevB=NaN;
+// ---- Состояние ----
+let on=false, stm=null, raf=null;
+let rB=[],gB=[],bB=[],tB=[];
+let ppg=[];
+let sBPM=NaN, sHRV=NaN, lastVBPM=NaN, lastVT=0;
+let pR=NaN, pG=NaN, pB=NaN;
 let fc=0, ft0=0, fps=30;
-let signalLocked = false;  // гистерезис
+let locked=false;
+// Пиковый детектор
+let realIBIs=[];
+let lastPeakTime=0;
+let beatTimes=[];
+let heartBeatOn=false, heartTimer=null;
+// Спектр для рисования
+let drFreqs=[],drPowers=[],drPeakF=1,drMaxP=0,drSNR=0;
 
-// DOM
+// ---- DOM ----
 const vid=document.getElementById('vid');
 const ov=document.getElementById('ov');
 const co=ov.getContext('2d');
@@ -112,458 +143,470 @@ const bOff=document.getElementById('bOff');
 const stTxt=document.getElementById('stTxt');
 const dot=document.getElementById('dot');
 const qBar=document.getElementById('qBar');
+const fpsT=document.getElementById('fpsT');
 const vBPM=document.getElementById('vBPM');
 const vHRV=document.getElementById('vHRV');
 const vSTR=document.getElementById('vSTR');
 const vSNR=document.getElementById('vSNR');
-
+const heartIcon=document.getElementById('heartIcon');
+const beatInfo=document.getElementById('beatInfo');
 const cPPG=document.getElementById('cPPG');
-const xPPG=cPPG.getContext('2d');
+const xP=cPPG.getContext('2d');
 const cSPC=document.getElementById('cSPC');
-const xSPC=cSPC.getContext('2d');
+const xS=cSPC.getContext('2d');
 
 const hc=document.createElement('canvas');
-hc.width=C.CW; hc.height=C.CH;
+hc.width=C.CW;hc.height=C.CH;
 const hx=hc.getContext('2d',{willReadFrequently:true});
 
-bOn.onclick=start; bOff.onclick=stop;
+bOn.onclick=startApp;
+bOff.onclick=stopApp;
 
-async function start(){
+async function startApp(){
  try{
-  stm=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30}},audio:false});
-  vid.srcObject=stm; await vid.play();
-  reset(); on=true;
-  bOn.style.display='none'; bOff.style.display='';
-  stTxt.textContent='Поиск лица...'; dot.className='dot wait';
-  ft0=performance.now(); fc=0;
+  stm=await navigator.mediaDevices.getUserMedia({
+   video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30}},audio:false
+  });
+  vid.srcObject=stm;await vid.play();
+  resetAll();on=true;
+  bOn.style.display='none';bOff.style.display='';
+  stTxt.textContent='Поиск лица...';dot.className='dot wait';
+  ft0=performance.now();fc=0;
   loop();
  }catch(e){alert('Камера: '+e.message)}
 }
 
-function stop(){
- on=false; if(raf)cancelAnimationFrame(raf);
+function stopApp(){
+ on=false;if(raf)cancelAnimationFrame(raf);
  if(stm)stm.getTracks().forEach(t=>t.stop());
  vid.srcObject=null;
- bOn.style.display=''; bOff.style.display='none';
- stTxt.textContent='Остановлено'; dot.className='dot';
+ bOn.style.display='';bOff.style.display='none';
+ stTxt.textContent='Остановлено';dot.className='dot';
  qBar.style.width='0%';
 }
 
-function reset(){
- rB=[];gB=[];bB=[];tB=[];ppg=[];iBuf=[];
- sBPM=NaN;sHRV=NaN;lastValidBPM=NaN;lastValidTime=0;
- prevR=NaN;prevG=NaN;prevB=NaN;
- signalLocked=false;
+function resetAll(){
+ rB=[];gB=[];bB=[];tB=[];ppg=[];
+ sBPM=NaN;sHRV=NaN;lastVBPM=NaN;lastVT=0;
+ pR=NaN;pG=NaN;pB=NaN;
+ locked=false;realIBIs=[];lastPeakTime=0;beatTimes=[];
+ drFreqs=[];drPowers=[];
  vBPM.textContent='--';vHRV.textContent='--';
  vSTR.textContent='--';vSNR.textContent='--';
+ beatInfo.textContent='Ожидание ударов...';
 }
 
 // =========================================================================
-//  MAIN LOOP
+//  ГЛАВНЫЙ ЦИКЛ
 // =========================================================================
 function loop(){
  if(!on)return;
  try{
   const now=performance.now();
   fc++;
-  if(now-ft0>1000){fps=fc/((now-ft0)/1000);fc=0;ft0=now}
+  if(now-ft0>1000){fps=fc/((now-ft0)/1000);fc=0;ft0=now;fpsT.textContent=fps.toFixed(0)+' fps'}
 
   hx.drawImage(vid,0,0,C.CW,C.CH);
 
-  const rx=Math.floor(C.CW*C.ROI.x);
-  const ry=Math.floor(C.CH*C.ROI.y);
-  const rw=Math.floor(C.CW*C.ROI.w);
-  const rh=Math.floor(C.CH*C.ROI.h);
+  const rx=Math.floor(C.CW*C.ROI.x), ry=Math.floor(C.CH*C.ROI.y);
+  const rw=Math.floor(C.CW*C.ROI.w), rh=Math.floor(C.CH*C.ROI.h);
 
   const id=hx.getImageData(rx,ry,rw,rh);
   const sk=skinFilter(id.data);
-
   drawROI(rx,ry,rw,rh,sk.ok,sk.ratio);
 
   if(!sk.ok){
    stTxt.textContent='⚠ Лицо не обнаружено — направьте лицо в рамку';
-   dot.className='dot';
-   qBar.style.width='0%'; qBar.style.background='#ef4444';
-   // Показываем удержанный BPM, если был
-   showHeldBPM(now);
+   dot.className='dot';qBar.style.width='0%';qBar.style.background='#ef4444';
+   showHeld(now);
   } else {
-   // Motion check
-   if(!isNaN(prevR)){
-    const d=Math.max(Math.abs(sk.r-prevR),Math.abs(sk.g-prevG),Math.abs(sk.b-prevB));
-    if(d>C.MOTION_MAX){
-     prevR=sk.r;prevG=sk.g;prevB=sk.b;
-     stTxt.textContent='🔄 Движение — замрите';
-     dot.className='dot wait';
-     showHeldBPM(now);
-     throw 'motion'; // пропускаем кадр
-    }
+   // Motion
+   if(!isNaN(pR)){
+    const d=Math.max(Math.abs(sk.r-pR),Math.abs(sk.g-pG),Math.abs(sk.b-pB));
+    if(d>C.MOTION_MAX){pR=sk.r;pG=sk.g;pB=sk.b;
+     stTxt.textContent='🔄 Движение...';dot.className='dot wait';
+     showHeld(now);throw 'skip'}
    }
-   prevR=sk.r;prevG=sk.g;prevB=sk.b;
+   pR=sk.r;pG=sk.g;pB=sk.b;
 
    rB.push(sk.r);gB.push(sk.g);bB.push(sk.b);tB.push(now);
-
    const mx=Math.floor(fps*C.BUF_SEC);
    while(rB.length>mx){rB.shift();gB.shift();bB.shift();tB.shift()}
 
-   const need=Math.floor(fps*3.5);
-   if(rB.length>=need){
-    runAnalysis(now);
-   } else {
-    const p=Math.round(rB.length/need*100);
-    stTxt.textContent=`Калибровка: ${p}%`;
+   const need=Math.floor(fps*3);
+   if(rB.length>=need) runPOS(now);
+   else{
+    stTxt.textContent=`Калибровка: ${Math.round(rB.length/need*100)}%`;
     dot.className='dot wait';
    }
   }
 
-  if(fc%2===0){drawPPG();drawSpec()}
+  drawPPG(now);
+  drawSpec();
 
- }catch(e){
-  if(e!=='motion')console.error(e);
- }finally{
-  raf=requestAnimationFrame(loop);
- }
+ }catch(e){if(e!=='skip')console.error(e)}
+ finally{raf=requestAnimationFrame(loop)}
 }
 
 // =========================================================================
-//  СТРОГИЙ ФИЛЬТР КОЖИ (из v2, улучшенный)
+//  ФИЛЬТР КОЖИ — тройной (RGB + HSV + YCbCr)
 // =========================================================================
 function skinFilter(px){
  let sr=0,sg=0,sb=0,cnt=0;
  const tot=px.length/4;
-
- // Обрабатываем каждый 3-й пиксель для скорости
  for(let i=0;i<px.length;i+=12){
   const r=px[i],g=px[i+1],b=px[i+2];
 
-  // --- Этап 1: RGB правила (строгие) ---
-  // Кожа: R > G > B (в большинстве случаев)
-  // При холодном свете может быть R ≈ G, но R > B всегда
-  const rgbOk = r > 60 && g > 40 && b > 20 &&
-                r > b + 5 &&
-                (r - b) > 15 &&
-                Math.abs(r - g) < 80 &&
-                (Math.max(r,g,b) - Math.min(r,g,b)) > 12 &&
-                r < 250 && g < 250; // Не пересвеченные пиксели
-
-  if(!rgbOk) continue;
-
-  // --- Этап 2: HSV проверка оттенка (Hue) ---
-  // Кожа человека: Hue от 0° до 50° (оранжево-жёлтый диапазон)
-  const max=Math.max(r,g,b), min=Math.min(r,g,b);
-  const delta=max-min;
-  if(delta<10) continue; // Серые пиксели — не кожа
-
+  // RGB
+  if(!(r>55&&g>35&&b>15&&r>b+5&&(r-b)>12&&Math.abs(r-g)<85&&r<252&&g<252))continue;
+  // HSV hue
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+  if(delta<8)continue;
   let hue=0;
-  if(max===r) hue=60*((g-b)/delta % 6);
-  else if(max===g) hue=60*((b-r)/delta+2);
+  if(max===r)hue=60*((g-b)/delta%6);
+  else if(max===g)hue=60*((b-r)/delta+2);
   else hue=60*((r-g)/delta+4);
-  if(hue<0) hue+=360;
-
+  if(hue<0)hue+=360;
   const sat=max>0?delta/max:0;
   const val=max/255;
+  if(!((hue<=55||hue>=335)&&sat>=.07&&sat<=.82&&val>=.20&&val<=.97))continue;
+  // YCbCr
+  const cb=128-.169*r-.331*g+.5*b;
+  const cr=128+.5*r-.419*g-.081*b;
+  if(!(cb>=72&&cb<=135&&cr>=128&&cr<=188))continue;
 
-  // Кожа: Hue 0-55°, Saturation 0.10-0.75, Value 0.25-0.95
-  const hsvOk = (hue<=55 || hue>=340) &&
-                sat>=0.08 && sat<=0.78 &&
-                val>=0.22 && val<=0.96;
-
-  if(!hsvOk) continue;
-
-  // --- Этап 3: YCbCr проверка ---
-  const cb = 128 - 0.169*r - 0.331*g + 0.500*b;
-  const cr = 128 + 0.500*r - 0.419*g - 0.081*b;
-  const ycbcrOk = cb>=75 && cb<=130 && cr>=130 && cr<=185;
-
-  if(!ycbcrOk) continue;
-
-  // Все 3 этапа пройдены — это кожа
-  sr+=r; sg+=g; sb+=b; cnt++;
+  sr+=r;sg+=g;sb+=b;cnt++;
  }
-
- const effectiveTotal=tot/3;
- const ratio=cnt/effectiveTotal;
-
- return {
-  ok: ratio >= C.SKIN_MIN_RATIO,
-  r: cnt>0?sr/cnt:0,
-  g: cnt>0?sg/cnt:0,
-  b: cnt>0?sb/cnt:0,
-  ratio
- };
+ const ef=tot/3;
+ return{ok:cnt/ef>=C.SKIN_MIN,r:cnt>0?sr/cnt:0,g:cnt>0?sg/cnt:0,b:cnt>0?sb/cnt:0,ratio:cnt/ef};
 }
 
 // =========================================================================
-//  POS + АНАЛИЗ
+//  POS АЛГОРИТМ + ПИКОВЫЙ ДЕТЕКТОР + СПЕКТР
 // =========================================================================
-function runAnalysis(now){
+function runPOS(now){
  const N=rB.length;
  const wl=Math.max(16,Math.floor(fps*C.WIN_SEC));
  const H=new Float64Array(N);
-
- // POS со скользящим перекрывающимся окном
  const step=Math.max(1,Math.floor(wl/4));
+
  for(let s=0;s<=N-wl;s+=step){
   let mR=0,mG=0,mB=0;
   for(let j=s;j<s+wl;j++){mR+=rB[j];mG+=gB[j];mB+=bB[j]}
   mR/=wl;mG/=wl;mB/=wl;
   if(mR<1||mG<1||mB<1)continue;
 
-  const S1=new Float64Array(wl);
-  const S2=new Float64Array(wl);
+  const S1=new Float64Array(wl),S2=new Float64Array(wl);
   for(let j=0;j<wl;j++){
-   const rn=rB[s+j]/mR, gn=gB[s+j]/mG, bn=bB[s+j]/mB;
-   S1[j]=gn-bn;
-   S2[j]=-2*rn+gn+bn;
+   const rn=rB[s+j]/mR,gn=gB[s+j]/mG,bn=bB[s+j]/mB;
+   S1[j]=gn-bn; S2[j]=-2*rn+gn+bn;
   }
-
-  const sd1=arrStd(S1), sd2=arrStd(S2);
+  const sd1=arrStd(S1),sd2=arrStd(S2);
   const a=sd2>1e-7?sd1/sd2:0;
-  for(let j=0;j<wl;j++) H[s+j]+=S1[j]+a*S2[j];
+  for(let j=0;j<wl;j++)H[s+j]+=S1[j]+a*S2[j];
  }
 
- // Детренд
- let dt=linearDetrend(H);
- // Полосовой фильтр (скользящее среднее HP + LP)
- dt=bandpass(dt,fps);
- // Z-нормализация
- ppg=zNorm(dt);
+ // Обработка сигнала
+ let sig=linearDetrend(H);
+ sig=bandpass(sig,fps);
+ ppg=Array.from(zNorm(sig));
 
- // Welch-подобный спектральный анализ
- welchSpectrum(ppg,fps,now);
+ // ========== ПИКОВЫЙ ДЕТЕКТОР НА ВРЕМЕННОМ СИГНАЛЕ ==========
+ detectPeaks(ppg, now);
+
+ // ========== СПЕКТРАЛЬНЫЙ АНАЛИЗ (Welch + параболическая интерполяция) ==========
+ const specBPM = welchSpectrum(ppg, fps);
+
+ // ========== ОБЪЕДИНЕНИЕ ДВУХ МЕТОДОВ ==========
+ const peakBPM = bpmFromPeaks();
+
+ let finalBPM = NaN;
+ if(!isNaN(peakBPM) && !isNaN(specBPM)){
+  // Если оба метода согласны (±15 BPM) — среднее взвешенное (пики важнее)
+  if(Math.abs(peakBPM - specBPM) < 15){
+   finalBPM = peakBPM * .65 + specBPM * .35;
+  } else {
+   // Не согласны — доверяем тому, у кого меньше вариативность
+   finalBPM = peakBPM; // пики обычно точнее
+  }
+ } else if(!isNaN(peakBPM)){
+  finalBPM = peakBPM;
+ } else if(!isNaN(specBPM)){
+  finalBPM = specBPM;
+ }
+
+ // SNR гистерезис
+ if(!locked && drSNR >= C.SNR_IN) locked = true;
+ if(locked && drSNR < C.SNR_OUT) locked = false;
+
+ if(locked && !isNaN(finalBPM) && finalBPM >= 42 && finalBPM <= 200){
+  if(isNaN(sBPM)) sBPM = finalBPM;
+  else {
+   const jump = Math.abs(finalBPM - sBPM);
+   const alpha = jump > 20 ? .04 : jump > 12 ? .07 : jump > 6 ? .12 : C.BPM_ALPHA;
+   sBPM = sBPM * (1 - alpha) + finalBPM * alpha;
+  }
+  const bpm = Math.round(sBPM);
+  lastVBPM = bpm; lastVT = now;
+  vBPM.textContent = bpm;
+  vBPM.style.opacity = '1';
+
+  calcHRV(bpm);
+
+  const nBeats = beatTimes.filter(t => now - t < 10000).length;
+  stTxt.textContent = `✅ Пульс: ${bpm} BPM · Ударов/10с: ${nBeats} · SNR: ${drSNR.toFixed(1)}dB`;
+  dot.className = 'dot ok';
+ } else {
+  showHeld(now);
+  stTxt.textContent = drSNR >= 0
+   ? `⏳ Слабый сигнал (${drSNR.toFixed(1)}dB) — замрите`
+   : '⚠ Нет ритма — замрите, свет спереди';
+  dot.className = 'dot wait';
+ }
 }
 
-function arrStd(a){
- let m=0;for(let i=0;i<a.length;i++)m+=a[i];m/=a.length;
- let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-m)**2;
- return Math.sqrt(s/a.length);
+// =========================================================================
+//  ПИКОВЫЙ ДЕТЕКТОР — находит каждый удар сердца в реальном времени
+// =========================================================================
+function detectPeaks(sig, now){
+ const N = sig.length;
+ if(N < 10) return;
+
+ // Адаптивный порог: 40% от максимума последних ~3 секунд
+ const lookback = Math.min(N, Math.floor(fps * 3));
+ let maxV = -1e9;
+ for(let i = N - lookback; i < N; i++){
+  if(sig[i] > maxV) maxV = sig[i];
+ }
+ const threshold = maxV * 0.35;
+
+ // Рефрактерный период (мин. время между ударами)
+ const refractSamples = Math.floor(fps * C.PEAK_REFRACT_SEC);
+
+ // Ищем пики в последних ~2 секундах (новые данные)
+ const searchStart = Math.max(3, N - Math.floor(fps * 2));
+
+ for(let i = searchStart; i < N - 2; i++){
+  if(sig[i] > threshold &&
+     sig[i] > sig[i-1] && sig[i] > sig[i-2] &&
+     sig[i] >= sig[i+1] && sig[i] >= sig[i+2]){
+
+   // Время этого пика
+   const peakTime = tB.length > i ? tB[i] : now - (N - i) / fps * 1000;
+
+   // Рефрактерный период
+   if(peakTime - lastPeakTime < C.PEAK_REFRACT_SEC * 1000) continue;
+
+   // IBI
+   if(lastPeakTime > 0){
+    const ibi = peakTime - lastPeakTime;
+    // Валидация: IBI от 300мс (200BPM) до 1500мс (40BPM)
+    if(ibi >= 300 && ibi <= 1500){
+     realIBIs.push(ibi);
+     if(realIBIs.length > 40) realIBIs.shift();
+    }
+   }
+
+   lastPeakTime = peakTime;
+   beatTimes.push(peakTime);
+
+   // Анимация сердца
+   triggerHeartBeat();
+  }
+ }
+
+ // Чистим старые beat times (>30 сек)
+ while(beatTimes.length > 0 && now - beatTimes[0] > 30000) beatTimes.shift();
 }
+
+function triggerHeartBeat(){
+ heartIcon.classList.add('beat');
+ if(heartTimer) clearTimeout(heartTimer);
+ heartTimer = setTimeout(() => heartIcon.classList.remove('beat'), 150);
+
+ // Обновляем инфо
+ if(realIBIs.length >= 2){
+  const lastIBI = realIBIs[realIBIs.length - 1];
+  const instantBPM = Math.round(60000 / lastIBI);
+  beatInfo.textContent = `Удар! IBI: ${Math.round(lastIBI)}мс (${instantBPM} BPM)`;
+ } else {
+  beatInfo.textContent = 'Удар обнаружен!';
+ }
+}
+
+// =========================================================================
+//  BPM ИЗ РЕАЛЬНЫХ ПИКОВ (медианный фильтр IBI)
+// =========================================================================
+function bpmFromPeaks(){
+ if(realIBIs.length < 3) return NaN;
+
+ // Берём последние 12 интервалов
+ const recent = realIBIs.slice(-12);
+
+ // Медианный фильтр для удаления выбросов
+ const sorted = [...recent].sort((a,b) => a - b);
+ // Удаляем крайние 20%
+ const trim = Math.max(1, Math.floor(sorted.length * .2));
+ const trimmed = sorted.slice(trim, sorted.length - trim);
+ if(trimmed.length === 0) return NaN;
+
+ const medianIBI = trimmed[Math.floor(trimmed.length / 2)];
+ const bpm = 60000 / medianIBI;
+
+ return (bpm >= 42 && bpm <= 200) ? bpm : NaN;
+}
+
+// =========================================================================
+//  WELCH СПЕКТР + ПАРАБОЛИЧЕСКАЯ ИНТЕРПОЛЯЦИЯ ПИКА
+// =========================================================================
+function welchSpectrum(sig, fs){
+ const N = sig.length;
+ const segLen = Math.min(N, Math.floor(fs * 6));
+ const overlap = Math.floor(segLen * .6);
+ const step = segLen - overlap;
+ const segs = [];
+ for(let s = 0; s <= N - segLen; s += step) segs.push(sig.slice(s, s + segLen));
+ if(segs.length === 0) segs.push(sig.slice(-segLen));
+
+ const bins = C.FBINS;
+ const freqs = new Float64Array(bins);
+ const avgP = new Float64Array(bins);
+
+ for(let i = 0; i < bins; i++) freqs[i] = C.FLO + (C.FHI - C.FLO) * i / (bins - 1);
+
+ for(const seg of segs){
+  const w = applyHann(seg);
+  for(let i = 0; i < bins; i++) avgP[i] += goertzel(w, freqs[i], fs);
+ }
+ for(let i = 0; i < bins; i++) avgP[i] /= segs.length;
+
+ // Поиск пика
+ let pkI = 0, pkP = 0;
+ for(let i = 0; i < bins; i++){
+  if(avgP[i] > pkP){ pkP = avgP[i]; pkI = i; }
+ }
+
+ // Параболическая интерполяция для точного пика
+ let peakF = freqs[pkI];
+ if(pkI > 0 && pkI < bins - 1){
+  const a = avgP[pkI - 1], b = avgP[pkI], c = avgP[pkI + 1];
+  const denom = a - 2*b + c;
+  if(Math.abs(denom) > 1e-12){
+   const delta = .5 * (a - c) / denom;
+   const fStep = (C.FHI - C.FLO) / (bins - 1);
+   peakF = freqs[pkI] + delta * fStep;
+  }
+ }
+
+ // SNR
+ const hw = .2;
+ let sigE=0,noiE=0,nS=0,nN=0;
+ for(let i=0;i<bins;i++){
+  if(Math.abs(freqs[i]-peakF)<=hw){sigE+=avgP[i];nS++}
+  else{noiE+=avgP[i];nN++}
+ }
+ const snr = 10*Math.log10((nS>0?sigE/nS:0)/(nN>0?noiE/nN:1e-12));
+
+ drFreqs=freqs;drPowers=avgP;drPeakF=peakF;drMaxP=pkP;drSNR=snr;
+
+ const qp=Math.min(100,Math.max(0,snr/8*100));
+ qBar.style.width=qp+'%';
+ qBar.style.background=snr>=C.SNR_IN?'#22c55e':snr>=0?'#f59e0b':'#ef4444';
+ vSNR.textContent=snr.toFixed(1)+' dB';
+
+ const bpm = peakF * 60;
+ return (bpm >= 42 && bpm <= 200) ? bpm : NaN;
+}
+
+function applyHann(a){
+ const n=a.length;const o=new Float64Array(n);
+ for(let i=0;i<n;i++)o[i]=a[i]*.5*(1-Math.cos(2*Math.PI*i/(n-1)));
+ return o;
+}
+
+function goertzel(s,f,fs){
+ const N=s.length,k=Math.round(f*N/fs),w=2*Math.PI*k/N,c=2*Math.cos(w);
+ let s1=0,s2=0;
+ for(let i=0;i<N;i++){const s0=s[i]+c*s1-s2;s2=s1;s1=s0}
+ return Math.abs(s1*s1+s2*s2-c*s1*s2)/(N*N);
+}
+
+// =========================================================================
+//  ВСПОМОГАТЕЛЬНЫЕ
+// =========================================================================
+function arrStd(a){let m=0;for(let i=0;i<a.length;i++)m+=a[i];m/=a.length;let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-m)**2;return Math.sqrt(s/a.length)}
 
 function linearDetrend(a){
- const n=a.length;const o=new Float64Array(n);
+ const n=a.length,o=new Float64Array(n);
  let sx=0,sy=0,sxy=0,sxx=0;
  for(let i=0;i<n;i++){sx+=i;sy+=a[i];sxy+=i*a[i];sxx+=i*i}
- const d=n*sxx-sx*sx;
- if(Math.abs(d)<1e-10){o.set(a);return o}
- const sl=(n*sxy-sx*sy)/d, ic=(sy-sl*sx)/n;
- for(let i=0;i<n;i++)o[i]=a[i]-(sl*i+ic);
- return o;
+ const d=n*sxx-sx*sx;if(Math.abs(d)<1e-10){o.set(a);return o}
+ const sl=(n*sxy-sx*sy)/d,ic=(sy-sl*sx)/n;
+ for(let i=0;i<n;i++)o[i]=a[i]-(sl*i+ic);return o;
 }
 
 function bandpass(sig,fs){
  const n=sig.length;
- // HP: убираем частоты ниже 0.6 Гц (скользящая средняя с длинным окном)
  const hpW=Math.max(3,Math.round(fs/C.FLO));
  const trend=movAvg(sig,hpW);
  const hp=new Float64Array(n);
- for(let i=0;i<n;i++) hp[i]=sig[i]-trend[i];
-
- // LP: убираем частоты выше 3.5 Гц
+ for(let i=0;i<n;i++)hp[i]=sig[i]-trend[i];
  const lpW=Math.max(3,Math.round(fs/(C.FHI*2)));
  return movAvg(hp,lpW);
 }
 
 function movAvg(a,w){
- const n=a.length;const o=new Float64Array(n);
- const h=Math.floor(w/2);
- // Кумулятивная сумма для O(n)
+ const n=a.length,o=new Float64Array(n),h=Math.floor(w/2);
  const cs=new Float64Array(n+1);
- for(let i=0;i<n;i++) cs[i+1]=cs[i]+a[i];
- for(let i=0;i<n;i++){
-  const l=Math.max(0,i-h), r=Math.min(n,i+h+1);
-  o[i]=(cs[r]-cs[l])/(r-l);
- }
+ for(let i=0;i<n;i++)cs[i+1]=cs[i]+a[i];
+ for(let i=0;i<n;i++){const l=Math.max(0,i-h),r=Math.min(n,i+h+1);o[i]=(cs[r]-cs[l])/(r-l)}
  return o;
 }
 
 function zNorm(a){
  let m=0;for(let i=0;i<a.length;i++)m+=a[i];m/=a.length;
  let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-m)**2;
- const sd=Math.sqrt(s/a.length);
- const o=new Float64Array(a.length);
+ const sd=Math.sqrt(s/a.length),o=new Float64Array(a.length);
  if(sd<1e-9)return o;
- for(let i=0;i<a.length;i++)o[i]=(a[i]-m)/sd;
- return o;
+ for(let i=0;i<a.length;i++)o[i]=(a[i]-m)/sd;return o;
 }
 
-// =========================================================================
-//  WELCH СПЕКТР — усредняем несколько перекрывающихся окон FFT
-//  Это даёт гораздо более стабильный спектр, чем одиночный Goertzel
-// =========================================================================
-let lastFreqs=[], lastPowers=[], lastPeakF=1, lastMaxP=0, lastSNR=0;
-
-function welchSpectrum(sig, fs, now){
- const N=sig.length;
- // Размер сегмента Welch: ~6 секунд
- const segLen=Math.min(N, Math.floor(fs*6));
- const overlap=Math.floor(segLen/2);
- const step=segLen-overlap;
-
- // Собираем сегменты
- const segs=[];
- for(let s=0;s<=N-segLen;s+=step){
-  segs.push(sig.slice(s,s+segLen));
- }
- if(segs.length===0) segs.push(sig.slice(-segLen));
-
- // Для каждого сегмента считаем спектр через Goertzel, потом усредняем
- const bins=C.FBINS;
- const freqs=new Float64Array(bins);
- const avgP=new Float64Array(bins);
-
- for(let i=0;i<bins;i++){
-  freqs[i]=C.FLO+(C.FHI-C.FLO)*i/(bins-1);
- }
-
- for(const seg of segs){
-  // Применяем окно Ханна
-  const windowed=applyHann(seg);
-  for(let i=0;i<bins;i++){
-   avgP[i]+=goertzel(windowed, freqs[i], fs);
-  }
- }
-
- // Усреднение
- for(let i=0;i<bins;i++) avgP[i]/=segs.length;
-
- // Поиск пика
- let peakP=0, peakF=1, peakIdx=0;
- for(let i=0;i<bins;i++){
-  if(avgP[i]>peakP){peakP=avgP[i];peakF=freqs[i];peakIdx=i}
- }
-
- // SNR: пик (±0.25 Гц) vs остальное
- const hw=0.25;
- let sigE=0,noiE=0,nS=0,nN=0;
- for(let i=0;i<bins;i++){
-  if(Math.abs(freqs[i]-peakF)<=hw){sigE+=avgP[i];nS++}
-  else{noiE+=avgP[i];nN++}
- }
- const sigD=nS>0?sigE/nS:0;
- const noiD=nN>0?noiE/nN:1e-12;
- const snr=10*Math.log10(sigD/noiD);
-
- // Сохраняем для рисования
- lastFreqs=freqs;lastPowers=avgP;lastPeakF=peakF;lastMaxP=peakP;lastSNR=snr;
-
- // Качество бар
- const qp=Math.min(100,Math.max(0,snr/8*100));
- qBar.style.width=qp+'%';
- qBar.style.background=snr>=C.SNR_ENTER?'#22c55e':snr>=0?'#f59e0b':'#ef4444';
-
- vSNR.textContent=snr.toFixed(1)+' dB';
-
- // Гистерезис: вход при SNR_ENTER, выход при SNR_EXIT
- if(!signalLocked && snr>=C.SNR_ENTER) signalLocked=true;
- if(signalLocked && snr<C.SNR_EXIT) signalLocked=false;
-
- const rawBPM=peakF*60;
-
- if(signalLocked && rawBPM>=42 && rawBPM<=200){
-  // Адаптивное сглаживание
-  if(isNaN(sBPM)){
-   sBPM=rawBPM;
-  } else {
-   const jump=Math.abs(rawBPM-sBPM);
-   // Чем больше скачок — тем меньше вес нового значения
-   const alpha=jump>25?.06:jump>15?.10:jump>8?.15:C.BPM_ALPHA;
-   sBPM=sBPM*(1-alpha)+rawBPM*alpha;
-  }
-
-  const bpm=Math.round(sBPM);
-  lastValidBPM=bpm;
-  lastValidTime=now;
-  vBPM.textContent=bpm;
-
-  // IBI для HRV
-  const ibi=60000/rawBPM;
-  iBuf.push(ibi);
-  if(iBuf.length>40)iBuf.shift();
-
-  calcHRVStress(bpm);
-
-  stTxt.textContent=`✅ Пульс: ${bpm} BPM · SNR: ${snr.toFixed(1)} dB`;
-  dot.className='dot ok';
-
- } else {
-  showHeldBPM(now);
-  if(snr>=0){
-   stTxt.textContent=`⏳ Слабый сигнал (${snr.toFixed(1)} dB) — замрите`;
-   dot.className='dot wait';
-  } else {
-   stTxt.textContent='⚠ Нет пульсового ритма — замрите, свет спереди';
-   dot.className='dot wait';
-  }
- }
-}
-
-function applyHann(a){
- const n=a.length;
- const o=new Float64Array(n);
- for(let i=0;i<n;i++){
-  const w=0.5*(1-Math.cos(2*Math.PI*i/(n-1)));
-  o[i]=a[i]*w;
- }
- return o;
-}
-
-function goertzel(sig,freq,fs){
- const N=sig.length;
- const k=Math.round(freq*N/fs);
- const w=(2*Math.PI*k)/N;
- const c=2*Math.cos(w);
- let s1=0,s2=0;
- for(let i=0;i<N;i++){const s0=sig[i]+c*s1-s2;s2=s1;s1=s0}
- return Math.abs(s1*s1+s2*s2-c*s1*s2)/(N*N);
-}
-
-// =========================================================================
-//  Удержание последнего BPM при кратковременных потерях
-// =========================================================================
-function showHeldBPM(now){
- if(!isNaN(lastValidBPM) && (now-lastValidTime)<C.HOLD_SEC*1000){
-  vBPM.textContent=lastValidBPM;
-  vBPM.style.opacity='.6';
- } else {
-  vBPM.textContent='--';
-  vBPM.style.opacity='1';
- }
+function showHeld(now){
+ if(!isNaN(lastVBPM)&&(now-lastVT)<C.HOLD_SEC*1000){
+  vBPM.textContent=lastVBPM;vBPM.style.opacity='.5';
+ }else{vBPM.textContent='--';vBPM.style.opacity='1'}
 }
 
 // =========================================================================
 //  HRV & СТРЕСС
 // =========================================================================
-function calcHRVStress(bpm){
+function calcHRV(bpm){
  vBPM.style.opacity='1';
- if(iBuf.length<5)return;
+ if(realIBIs.length < 5) return;
 
- // RMSSD
+ // RMSSD из реальных IBI
+ const recent = realIBIs.slice(-20);
  let ss=0,cn=0;
- for(let i=1;i<iBuf.length;i++){const d=iBuf[i]-iBuf[i-1];ss+=d*d;cn++}
+ for(let i=1;i<recent.length;i++){
+  const d=recent[i]-recent[i-1];
+  ss+=d*d;cn++;
+ }
+ if(cn===0)return;
  const rmssd=Math.sqrt(ss/cn);
 
  if(isNaN(sHRV))sHRV=rmssd;
- else sHRV=sHRV*.8+rmssd*.2;
+ else sHRV=sHRV*.82+rmssd*.18;
 
- const hrv=Math.round(Math.max(5,Math.min(150,sHRV)));
+ const hrv=Math.round(Math.max(5,Math.min(180,sHRV)));
  vHRV.textContent=hrv;
 
- // Стресс (BPM-компонент + HRV-компонент)
  let sb;
- if(bpm<=60)sb=5;
- else if(bpm<=70)sb=15;
- else if(bpm<=78)sb=25;
- else if(bpm<=86)sb=40;
- else if(bpm<=95)sb=55;
- else if(bpm<=105)sb=70;
- else sb=85;
+ if(bpm<=60)sb=5;else if(bpm<=70)sb=15;else if(bpm<=78)sb=25;
+ else if(bpm<=86)sb=38;else if(bpm<=95)sb=52;else if(bpm<=105)sb=68;else sb=85;
 
  let sh;
- if(hrv>=80)sh=5;
- else if(hrv>=55)sh=20;
- else if(hrv>=40)sh=35;
- else if(hrv>=28)sh=50;
- else if(hrv>=18)sh=70;
- else sh=88;
+ if(hrv>=80)sh=5;else if(hrv>=55)sh=18;else if(hrv>=40)sh=32;
+ else if(hrv>=28)sh=48;else if(hrv>=18)sh=65;else sh=88;
 
  vSTR.textContent=Math.round(Math.max(5,Math.min(98,sb*.35+sh*.65)));
 }
@@ -573,118 +616,100 @@ function calcHRVStress(bpm){
 // =========================================================================
 function drawROI(x,y,w,h,ok,ratio){
  co.clearRect(0,0,C.CW,C.CH);
-
- // Затемнение вне ROI
- co.fillStyle='rgba(0,0,0,.4)';
- co.fillRect(0,0,C.CW,C.CH);
- co.clearRect(x,y,w,h);
-
+ co.fillStyle='rgba(0,0,0,.4)';co.fillRect(0,0,C.CW,C.CH);co.clearRect(x,y,w,h);
  const cl=ok?'#22c55e':'#ef4444';
- co.strokeStyle=cl;co.lineWidth=2;
- co.strokeRect(x,y,w,h);
-
- // Угловые маркеры
- const cn=14;
- co.lineWidth=3;co.strokeStyle=cl;
+ co.strokeStyle=cl;co.lineWidth=2;co.strokeRect(x,y,w,h);
+ const cn=14;co.lineWidth=3;co.strokeStyle=cl;
  co.beginPath();co.moveTo(x,y+cn);co.lineTo(x,y);co.lineTo(x+cn,y);co.stroke();
  co.beginPath();co.moveTo(x+w-cn,y);co.lineTo(x+w,y);co.lineTo(x+w,y+cn);co.stroke();
  co.beginPath();co.moveTo(x,y+h-cn);co.lineTo(x,y+h);co.lineTo(x+cn,y+h);co.stroke();
  co.beginPath();co.moveTo(x+w-cn,y+h);co.lineTo(x+w,y+h);co.lineTo(x+w,y+h-cn);co.stroke();
-
- // Текст
- co.fillStyle=cl;
- co.font='bold 11px sans-serif';
- const pct=Math.round(ratio*100);
- co.fillText(ok?`✓ Кожа ${pct}%`:`✗ Нет кожи (${pct}%)`,x+4,y-5);
-
- // Пульсирующая точка при захвате
- if(ok && signalLocked && !isNaN(sBPM)){
-  const p=Math.sin(performance.now()/1000*(sBPM/60)*Math.PI*2)*.5+.5;
-  co.beginPath();co.arc(x+w-16,y+16,6,0,Math.PI*2);
-  co.fillStyle=`rgba(239,68,68,${.3+p*.7})`;co.fill();
- }
+ co.fillStyle=cl;co.font='bold 11px sans-serif';
+ co.fillText(ok?`✓ Кожа ${Math.round(ratio*100)}%`:`✗ Нет кожи (${Math.round(ratio*100)}%)`,x+4,y-5);
 }
 
-function drawPPG(){
- const can=cPPG;
- const w=can.width=can.clientWidth*2;
- const h=can.height=can.clientHeight*2;
- xPPG.clearRect(0,0,w,h);
+function drawPPG(now){
+ const can=cPPG;const w=can.width=can.clientWidth*2;const h=can.height=can.clientHeight*2;
+ xP.clearRect(0,0,w,h);
+ if(ppg.length<4){xP.fillStyle='#4b5563';xP.font='12px sans-serif';xP.fillText('BVP — ожидание...',12,h/2);return}
 
- if(ppg.length<4){
-  xPPG.fillStyle='#4b5563';xPPG.font='12px sans-serif';
-  xPPG.fillText('BVP — ожидание данных...',12,h/2);
-  return;
- }
-
- const show=Math.min(ppg.length,220);
- const sl=ppg.slice(-show);
- let mn=1e9,mx=-1e9;
- for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
+ const show=Math.min(ppg.length,240);const sl=ppg.slice(-show);
+ let mn=1e9,mx=-1e9;for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
  const rng=mx-mn||1;
 
  // Сетка
- xPPG.strokeStyle='rgba(255,255,255,.04)';xPPG.lineWidth=1;
- for(let y0=0;y0<h;y0+=h/4){xPPG.beginPath();xPPG.moveTo(0,y0);xPPG.lineTo(w,y0);xPPG.stroke()}
+ xP.strokeStyle='rgba(255,255,255,.04)';xP.lineWidth=1;
+ for(let y0=0;y0<h;y0+=h/4){xP.beginPath();xP.moveTo(0,y0);xP.lineTo(w,y0);xP.stroke()}
+
+ // Порог детектора
+ const thr = mx * .35;
+ const thrY = h - ((thr - mn) / rng) * (h * .8) - h * .1;
+ xP.strokeStyle='rgba(239,68,68,.25)';xP.lineWidth=1;xP.setLineDash([4,4]);
+ xP.beginPath();xP.moveTo(0,thrY);xP.lineTo(w,thrY);xP.stroke();
+ xP.setLineDash([]);
 
  // Волна
- xPPG.beginPath();xPPG.strokeStyle='#38bdf8';xPPG.lineWidth=2;
- xPPG.shadowColor='#38bdf8';xPPG.shadowBlur=3;
+ xP.beginPath();xP.strokeStyle='#38bdf8';xP.lineWidth=2;
+ xP.shadowColor='#38bdf8';xP.shadowBlur=3;
  for(let i=0;i<sl.length;i++){
   const px=i/(sl.length-1)*w;
   const py=h-((sl[i]-mn)/rng)*(h*.8)-h*.1;
-  i===0?xPPG.moveTo(px,py):xPPG.lineTo(px,py);
+  i===0?xP.moveTo(px,py):xP.lineTo(px,py);
  }
- xPPG.stroke();xPPG.shadowBlur=0;
+ xP.stroke();xP.shadowBlur=0;
 
- xPPG.fillStyle='#6b7280';xPPG.font='11px monospace';
- xPPG.fillText('BVP (POS)',8,14);
+ // Отмечаем пики на графике
+ // Находим пики в отображаемом срезе
+ for(let i=2;i<sl.length-2;i++){
+  if(sl[i]>thr && sl[i]>sl[i-1] && sl[i]>sl[i-2] && sl[i]>=sl[i+1] && sl[i]>=sl[i+2]){
+   const px=i/(sl.length-1)*w;
+   const py=h-((sl[i]-mn)/rng)*(h*.8)-h*.1;
+   xP.beginPath();xP.arc(px,py,4,0,Math.PI*2);
+   xP.fillStyle='#ef4444';xP.fill();
+  }
+ }
+
+ xP.fillStyle='#6b7280';xP.font='11px monospace';
+ xP.fillText('BVP (POS) — красные точки = удары сердца',8,14);
+
+ // Метка порога
+ xP.fillStyle='rgba(239,68,68,.4)';xP.font='9px monospace';
+ xP.fillText('порог',w-40,thrY-4);
 }
 
 function drawSpec(){
- const can=cSPC;
- const w=can.width=can.clientWidth*2;
- const h=can.height=can.clientHeight*2;
- xSPC.clearRect(0,0,w,h);
-
- if(!lastFreqs.length)return;
+ const can=cSPC;const w=can.width=can.clientWidth*2;const h=can.height=can.clientHeight*2;
+ xS.clearRect(0,0,w,h);
+ if(!drFreqs.length)return;
 
  const pad={l:45,r:12,t:24,b:26};
- const pw=w-pad.l-pad.r;
- const ph=h-pad.t-pad.b;
- const bw=pw/lastFreqs.length;
+ const pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
+ const bw=pw/drFreqs.length;
 
- for(let i=0;i<lastFreqs.length;i++){
-  const nm=lastMaxP>0?lastPowers[i]/lastMaxP:0;
-  const bh=nm*ph;
-  const bx=pad.l+i*bw;
-  const by=pad.t+ph-bh;
-
-  const isPk=Math.abs(lastFreqs[i]-lastPeakF)<.04;
-  xSPC.fillStyle=isPk?'#ef4444':`rgba(56,189,248,${.12+nm*.6})`;
-  xSPC.fillRect(bx,by,Math.max(bw-1,1),bh);
+ for(let i=0;i<drFreqs.length;i++){
+  const nm=drMaxP>0?drPowers[i]/drMaxP:0;
+  const bh=nm*ph;const bx=pad.l+i*bw;const by=pad.t+ph-bh;
+  const isPk=Math.abs(drFreqs[i]-drPeakF)<.04;
+  xS.fillStyle=isPk?'#ef4444':`rgba(56,189,248,${.1+nm*.6})`;
+  xS.fillRect(bx,by,Math.max(bw-1,1),bh);
  }
 
- // Подписи BPM
- xSPC.fillStyle='#9ca3af';xSPC.font='10px monospace';xSPC.textAlign='center';
+ xS.fillStyle='#9ca3af';xS.font='10px monospace';xS.textAlign='center';
  for(let b=60;b<=180;b+=20){
-  const f=b/60;
-  const px=pad.l+((f-C.FLO)/(C.FHI-C.FLO))*pw;
-  xSPC.fillText(b+'',px,h-5);
+  const f=b/60;const px=pad.l+((f-C.FLO)/(C.FHI-C.FLO))*pw;
+  xS.fillText(b+'',px,h-5);
  }
 
- // Пик
- const pkX=pad.l+((lastPeakF-C.FLO)/(C.FHI-C.FLO))*pw;
- xSPC.strokeStyle='#ef4444';xSPC.lineWidth=1.5;
- xSPC.setLineDash([4,3]);
- xSPC.beginPath();xSPC.moveTo(pkX,pad.t);xSPC.lineTo(pkX,pad.t+ph);xSPC.stroke();
- xSPC.setLineDash([]);
+ const pkX=pad.l+((drPeakF-C.FLO)/(C.FHI-C.FLO))*pw;
+ xS.strokeStyle='#ef4444';xS.lineWidth=1.5;xS.setLineDash([4,3]);
+ xS.beginPath();xS.moveTo(pkX,pad.t);xS.lineTo(pkX,pad.t+ph);xS.stroke();
+ xS.setLineDash([]);
 
- xSPC.fillStyle='#ef4444';xSPC.font='bold 12px monospace';
- xSPC.fillText(Math.round(lastPeakF*60)+' BPM',pkX,pad.t-5);
+ xS.fillStyle='#ef4444';xS.font='bold 12px monospace';
+ xS.fillText(Math.round(drPeakF*60)+' BPM',pkX,pad.t-5);
 
- xSPC.textAlign='left';xSPC.fillStyle='#6b7280';xSPC.font='11px monospace';
- xSPC.fillText(`Welch Spectrum · SNR ${lastSNR.toFixed(1)} dB`,pad.l,16);
+ xS.textAlign='left';xS.fillStyle='#6b7280';xS.font='11px monospace';
+ xS.fillText(`Welch Spectrum · SNR ${drSNR.toFixed(1)}dB`,pad.l,16);
 }
 </script>
 </body>
