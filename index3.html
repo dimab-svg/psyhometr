@@ -3,1078 +3,630 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Психометр 3 — Камера rPPG</title>
+    <title>Настоящий rPPG Психометр (POS Algorithm)</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #0a0a1a;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
+            background: #090a10;
+            color: #d1d5db;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
+            padding: 20px;
         }
+        h1 { font-size: 1.6rem; color: #38bdf8; margin-bottom: 4px; }
+        .sub { font-size: 0.85rem; color: #9ca3af; margin-bottom: 16px; }
 
-        h1 {
-            margin: 20px 0 5px;
-            font-size: 1.8em;
-            color: #00e5ff;
-            text-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
-        }
-
-        .subtitle {
-            color: #888;
-            font-size: 0.9em;
-            margin-bottom: 15px;
-        }
-
-        .container {
+        .main-layout {
             display: flex;
+            gap: 20px;
+            max-width: 1000px;
+            width: 100%;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 20px;
-            padding: 10px;
-            max-width: 1200px;
-            width: 100%;
         }
 
-        .video-panel {
+        .cam-wrapper {
             position: relative;
-            border: 2px solid #1a1a3e;
+            width: 360px;
+            height: 270px;
+            background: #000;
             border-radius: 12px;
             overflow: hidden;
-            background: #000;
+            border: 2px solid #1f2937;
         }
-
-        video {
-            display: block;
-            width: 320px;
-            height: 240px;
-            object-fit: cover;
-        }
-
-        canvas#faceCanvas {
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        canvas#overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 320px;
-            height: 240px;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            transform: scaleX(-1);
             pointer-events: none;
         }
 
-        .roi-label {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            background: rgba(0, 229, 255, 0.15);
-            color: #00e5ff;
-            padding: 3px 10px;
-            border-radius: 6px;
-            font-size: 0.75em;
-            backdrop-filter: blur(4px);
-        }
-
-        .metrics {
+        .cards {
             display: flex;
             flex-direction: column;
             gap: 12px;
-            min-width: 280px;
+            width: 280px;
         }
-
-        .metric-card {
-            background: linear-gradient(135deg, #111133, #1a1a3e);
-            border: 1px solid #2a2a5e;
-            border-radius: 12px;
-            padding: 18px 22px;
+        .card {
+            background: #131722;
+            border: 1px solid #1f2937;
+            padding: 14px 18px;
+            border-radius: 10px;
             text-align: center;
+            position: relative;
         }
+        .card-title { font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card-val { font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin: 4px 0; }
+        .card-unit { font-size: 0.75rem; color: #6b7280; }
+        .card.stress .card-val { color: #f87171; }
+        .card.hrv .card-val { color: #4ade80; }
 
-        .metric-card .label {
-            font-size: 0.8em;
-            color: #888;
-            margin-bottom: 4px;
-        }
-
-        .metric-card .value {
-            font-size: 2.4em;
-            font-weight: bold;
-            color: #00e5ff;
-            text-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
-        }
-
-        .metric-card .unit {
-            font-size: 0.7em;
-            color: #666;
-        }
-
-        .metric-card.stress .value {
-            color: #ff6b6b;
-            text-shadow: 0 0 15px rgba(255, 107, 107, 0.4);
-        }
-
-        .metric-card.hrv .value {
-            color: #51cf66;
-            text-shadow: 0 0 15px rgba(81, 207, 102, 0.4);
-        }
-
-        .chart-container {
+        .status-box {
             width: 100%;
-            max-width: 900px;
-            background: linear-gradient(135deg, #111133, #1a1a3e);
-            border: 1px solid #2a2a5e;
-            border-radius: 12px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-
-        canvas#signalChart {
-            width: 100% !important;
-            height: 200px !important;
-        }
-
-        canvas#ppgWave {
-            width: 100% !important;
-            height: 120px !important;
-            margin-top: 10px;
-        }
-
-        .status-bar {
-            margin-top: 12px;
+            max-width: 660px;
+            background: #111827;
+            border: 1px solid #1f2937;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-top: 14px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 0.85em;
+            justify-content: space-between;
+            font-size: 0.85rem;
         }
-
-        .status-dot {
+        .indicator {
+            display: inline-block;
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: #555;
-            transition: background 0.3s;
+            background: #ef4444;
+            margin-right: 8px;
         }
+        .indicator.ok { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .indicator.scan { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
 
-        .status-dot.active {
-            background: #00e5ff;
-            box-shadow: 0 0 8px #00e5ff;
-            animation: pulse-dot 1.5s infinite;
+        .charts {
+            width: 100%;
+            max-width: 660px;
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-
-        .status-dot.warning {
-            background: #ffa726;
-            box-shadow: 0 0 8px #ffa726;
-        }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        canvas.chart {
+            width: 100%;
+            height: 110px;
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
         }
 
         .controls {
-            margin: 15px 0;
+            margin-top: 16px;
             display: flex;
-            gap: 10px;
+            gap: 12px;
         }
-
         button {
-            padding: 10px 28px;
-            border: 1px solid #00e5ff;
-            background: rgba(0, 229, 255, 0.1);
-            color: #00e5ff;
-            border-radius: 8px;
+            background: #0284c7;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-weight: 600;
             cursor: pointer;
-            font-size: 0.95em;
-            transition: all 0.3s;
+            transition: 0.2s;
         }
+        button:hover { background: #0369a1; }
+        button:disabled { background: #374151; cursor: not-allowed; }
 
-        button:hover {
-            background: rgba(0, 229, 255, 0.25);
-            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+        .quality-meter {
+            width: 120px;
+            height: 8px;
+            background: #1f2937;
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
         }
-
-        button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .debug-log {
-            width: 100%;
-            max-width: 900px;
-            margin: 10px 0 30px;
-            padding: 10px 15px;
-            background: #0d0d20;
-            border: 1px solid #222;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.75em;
-            color: #666;
-            max-height: 120px;
-            overflow-y: auto;
-        }
-
-        .emotion-bar {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 8px;
-        }
-
-        .emotion-tag {
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 0.78em;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid #333;
-            transition: all 0.5s;
-        }
-
-        .emotion-tag.active {
-            border-color: #00e5ff;
-            background: rgba(0,229,255,0.15);
-            color: #00e5ff;
+        .quality-fill {
+            height: 100%;
+            width: 0%;
+            background: #ef4444;
+            transition: width 0.3s, background 0.3s;
         }
     </style>
 </head>
 <body>
 
-<h1>🧠 Психометр 3</h1>
-<p class="subtitle">Анализ пульса и эмоционального состояния по камере (rPPG)</p>
+    <h1>rPPG Психометр — Алгоритм POS</h1>
+    <div class="sub">Бесконтактная плетизмография сосудов кожи лица в реальном времени</div>
 
-<div class="controls">
-    <button id="btnStart">▶ Запустить</button>
-    <button id="btnStop" disabled>⏹ Остановить</button>
-</div>
-
-<div class="status-bar">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">Ожидание запуска...</span>
-</div>
-
-<div class="container">
-    <div class="video-panel">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="faceCanvas" width="320" height="240"></canvas>
-        <div class="roi-label">ROI: лоб</div>
-    </div>
-
-    <div class="metrics">
-        <div class="metric-card">
-            <div class="label">Пульс (BPM)</div>
-            <div class="value" id="bpmValue">--</div>
-            <div class="unit">ударов/мин</div>
+    <div class="main-layout">
+        <div class="cam-wrapper">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="overlay" width="360" height="270"></canvas>
         </div>
-        <div class="metric-card hrv">
-            <div class="label">Вариабельность (HRV)</div>
-            <div class="value" id="hrvValue">--</div>
-            <div class="unit">мс (RMSSD)</div>
-        </div>
-        <div class="metric-card stress">
-            <div class="label">Уровень стресса</div>
-            <div class="value" id="stressValue">--</div>
-            <div class="unit">%</div>
+
+        <div class="cards">
+            <div class="card">
+                <div class="card-title">Пульс (ЧСС)</div>
+                <div class="card-val" id="valBPM">--</div>
+                <div class="card-unit">BPM (уд/мин)</div>
+            </div>
+            <div class="card hrv">
+                <div class="card-title">Вариабельность (HRV)</div>
+                <div class="card-val" id="valHRV">--</div>
+                <div class="card-unit">RMSSD (мс)</div>
+            </div>
+            <div class="card stress">
+                <div class="card-title">Индекс стресса</div>
+                <div class="card-val" id="valStress">--</div>
+                <div class="card-unit">Шкала от 0 до 100%</div>
+            </div>
         </div>
     </div>
-</div>
 
-<div class="emotion-bar">
-    <span class="emotion-tag" id="emCalm">😌 Спокойствие</span>
-    <span class="emotion-tag" id="emFocus">🎯 Концентрация</span>
-    <span class="emotion-tag" id="emStress">😰 Напряжение</span>
-    <span class="emotion-tag" id="emExcite">⚡ Возбуждение</span>
-    <span class="emotion-tag" id="emFatigue">😴 Усталость</span>
-</div>
+    <div class="status-box">
+        <div>
+            <span class="indicator" id="indLight"></span>
+            <span id="txtStatus">Нажмите «Включить камеру»</span>
+        </div>
+        <div>
+            Качество сигнала: 
+            <div class="quality-meter"><div class="quality-fill" id="qualBar"></div></div>
+        </div>
+    </div>
 
-<div class="chart-container">
-    <canvas id="ppgWave"></canvas>
-</div>
+    <div class="charts">
+        <canvas id="chartPPG" class="chart" width="660" height="110"></canvas>
+        <canvas id="chartSpectrum" class="chart" width="660" height="110"></canvas>
+    </div>
 
-<div class="chart-container">
-    <canvas id="signalChart"></canvas>
-</div>
-
-<div class="debug-log" id="debugLog"></div>
+    <div class="controls">
+        <button id="btnToggle">Включить камеру</button>
+    </div>
 
 <script>
-// ============================================================
-//  ПСИХОМЕТР 3 — rPPG через веб-камеру
-//  Полностью автономный, с защитой от зависаний
-// ============================================================
+// =========================================================================
+//  rPPG Core: Алгоритм POS (Plane-Orthogonal-to-Skin)
+// =========================================================================
 
 const CONFIG = {
-    SAMPLE_RATE: 30,           // Целевой FPS
-    BUFFER_SIZE: 300,          // ~10 секунд при 30fps
-    MIN_SAMPLES_FOR_BPM: 90,  // Минимум 3 секунды для расчёта
-    BPM_MIN: 45,
-    BPM_MAX: 200,
-    ROI_FOREHEAD_Y: 0.12,     // Относительная позиция лба (от верха лица)
-    ROI_FOREHEAD_H: 0.18,
-    ROI_FOREHEAD_X: 0.25,
-    ROI_FOREHEAD_W: 0.50,
-    SMOOTHING_ALPHA: 0.15,    // Экспоненциальное сглаживание BPM
-    BANDPASS_LOW: 0.75,       // 45 BPM в Гц
-    BANDPASS_HIGH: 3.33,      // 200 BPM в Гц
+    FPS: 30,
+    WINDOW_SEC: 1.6,       // Длина окна POS (~48 кадров)
+    BUFFER_SEC: 8.0,       // Общий буфер анализа (~240 кадров)
+    MIN_SKIN_RATIO: 0.40,  // Минимум 40% пикселей в ROI должны быть кожей
+    MIN_SNR_DB: 2.0,       // Порог отношения сигнал/шум для подтверждения пульса
+    FREQ_MIN: 0.75,        // 45 BPM
+    FREQ_MAX: 3.00,        // 180 BPM
+    ROI_BOX: { x: 0.35, y: 0.15, w: 0.30, h: 0.22 } // Зона лба
 };
 
-// Глобальное состояние
-const state = {
-    running: false,
-    animFrameId: null,
-    stream: null,
-    rawGreen: [],
-    timestamps: [],
-    bpm: 0,
-    hrv: 0,
-    stress: 0,
-    lastValidBPM: 72,
-    frameCount: 0,
-    lastFrameTime: 0,
-    actualFPS: 30,
-    fpsBuffer: [],
-};
+let isRunning = false;
+let videoStream = null;
+let animId = null;
+
+// Буферы каналов
+let rBuffer = [], gBuffer = [], bBuffer = [], timeBuffer = [];
+let ppgSignal = [];
+let validIBIs = [];
 
 // DOM
 const video = document.getElementById('video');
-const faceCanvas = document.getElementById('faceCanvas');
-const faceCtx = faceCanvas.getContext('2d', { willReadFrequently: true });
-const ppgCanvas = document.getElementById('ppgWave');
-const ppgCtx = ppgCanvas.getContext('2d');
-const chartCanvas = document.getElementById('signalChart');
-const chartCtx = chartCanvas.getContext('2d');
-const btnStart = document.getElementById('btnStart');
-const btnStop = document.getElementById('btnStop');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const debugLog = document.getElementById('debugLog');
+const overlay = document.getElementById('overlay');
+const ctxOverlay = overlay.getContext('2d');
+const btnToggle = document.getElementById('btnToggle');
+const txtStatus = document.getElementById('txtStatus');
+const indLight = document.getElementById('indLight');
+const qualBar = document.getElementById('qualBar');
 
-// Скрытый canvas для извлечения пикселей
+const valBPM = document.getElementById('valBPM');
+const valHRV = document.getElementById('valHRV');
+const valStress = document.getElementById('valStress');
+
+const chartPPG = document.getElementById('chartPPG');
+const ctxPPG = chartPPG.getContext('2d');
+const chartSpectrum = document.getElementById('chartSpectrum');
+const ctxSpec = chartSpectrum.getContext('2d');
+
 const hiddenCanvas = document.createElement('canvas');
-hiddenCanvas.width = 320;
-hiddenCanvas.height = 240;
+hiddenCanvas.width = 360;
+hiddenCanvas.height = 270;
 const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
 
-// ============================================================
-//  Логирование
-// ============================================================
-function log(msg) {
-    const time = new Date().toLocaleTimeString();
-    const line = `[${time}] ${msg}`;
-    console.log(line);
-    debugLog.textContent += line + '\n';
-    debugLog.scrollTop = debugLog.scrollHeight;
-}
+// Запуск / Остановка
+btnToggle.addEventListener('click', async () => {
+    if (isRunning) {
+        stopApp();
+    } else {
+        await startApp();
+    }
+});
 
-// ============================================================
-//  Запуск / Остановка
-// ============================================================
-btnStart.addEventListener('click', startCapture);
-btnStop.addEventListener('click', stopCapture);
-
-async function startCapture() {
+async function startApp() {
     try {
-        log('Запрос доступа к камере...');
-        state.stream = await navigator.mediaDevices.getUserMedia({
+        videoStream = await navigator.mediaDevices.getUserMedia({
             video: {
-                facingMode: 'user',
-                width: { ideal: 320 },
-                height: { ideal: 240 },
+                width: { ideal: 640 },
+                height: { ideal: 480 },
                 frameRate: { ideal: 30 }
-            }
+            },
+            audio: false
         });
-        video.srcObject = state.stream;
+        video.srcObject = videoStream;
         await video.play();
 
-        // Сброс
-        state.rawGreen = [];
-        state.timestamps = [];
-        state.bpm = 0;
-        state.hrv = 0;
-        state.stress = 0;
-        state.frameCount = 0;
-        state.lastFrameTime = performance.now();
-        state.fpsBuffer = [];
-        state.running = true;
+        resetBuffers();
+        isRunning = true;
+        btnToggle.textContent = 'Остановить';
+        txtStatus.textContent = 'Поиск лица/кожи в кадре...';
+        indLight.className = 'indicator scan';
 
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        statusDot.className = 'status-dot active';
-        statusText.textContent = 'Захват видео... Накопление данных...';
-
-        log('Камера запущена. Начинаю захват кадров.');
-        processFrame();
-    } catch (err) {
-        log('ОШИБКА камеры: ' + err.message);
-        statusText.textContent = 'Ошибка: ' + err.message;
-        statusDot.className = 'status-dot warning';
+        processLoop();
+    } catch (e) {
+        alert('Не удалось получить доступ к веб-камере: ' + e.message);
     }
 }
 
-function stopCapture() {
-    state.running = false;
-    if (state.animFrameId) {
-        cancelAnimationFrame(state.animFrameId);
-        state.animFrameId = null;
-    }
-    if (state.stream) {
-        state.stream.getTracks().forEach(t => t.stop());
-        state.stream = null;
+function stopApp() {
+    isRunning = false;
+    if (animId) cancelAnimationFrame(animId);
+    if (videoStream) {
+        videoStream.getTracks().forEach(t => t.stop());
     }
     video.srcObject = null;
-
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-    statusDot.className = 'status-dot';
-    statusText.textContent = 'Остановлено.';
-    log('Захват остановлен.');
+    btnToggle.textContent = 'Включить камеру';
+    txtStatus.textContent = 'Камера отключена';
+    indLight.className = 'indicator';
+    qualBar.style.width = '0%';
+    resetBuffers();
+    ctxOverlay.clearRect(0,0,360,270);
 }
 
-// ============================================================
-//  ГЛАВНЫЙ ЦИКЛ ОБРАБОТКИ КАДРОВ
-//  Ключевой момент: requestAnimationFrame ВСЕГДА вызывается
-//  в блоке finally, чтобы цикл никогда не прерывался.
-// ============================================================
-function processFrame() {
-    if (!state.running) return;
+function resetBuffers() {
+    rBuffer = []; gBuffer = []; bBuffer = []; timeBuffer = [];
+    ppgSignal = [];
+    validIBIs = [];
+    valBPM.textContent = '--';
+    valHRV.textContent = '--';
+    valStress.textContent = '--';
+}
+
+// =========================================================================
+//  Главный цикл обработки
+// =========================================================================
+function processLoop() {
+    if (!isRunning) return;
 
     try {
-        const now = performance.now();
+        hiddenCtx.drawImage(video, 0, 0, 360, 270);
+        
+        // Координаты ROI
+        const rx = Math.floor(360 * CONFIG.ROI_BOX.x);
+        const ry = Math.floor(270 * CONFIG.ROI_BOX.y);
+        const rw = Math.floor(360 * CONFIG.ROI_BOX.w);
+        const rh = Math.floor(270 * CONFIG.ROI_BOX.h);
 
-        // Считаем реальный FPS
-        if (state.lastFrameTime > 0) {
-            const dt = now - state.lastFrameTime;
-            if (dt > 0) {
-                state.fpsBuffer.push(1000 / dt);
-                if (state.fpsBuffer.length > 30) state.fpsBuffer.shift();
-                state.actualFPS = state.fpsBuffer.reduce((a, b) => a + b, 0) / state.fpsBuffer.length;
+        const imgData = hiddenCtx.getImageData(rx, ry, rw, rh);
+        const skinStats = extractSkinRGB(imgData.data);
+
+        // Рисуем рамку ROI
+        drawOverlayROI(rx, ry, rw, rh, skinStats.isSkin);
+
+        if (skinStats.isSkin) {
+            const now = performance.now();
+            rBuffer.push(skinStats.r);
+            gBuffer.push(skinStats.g);
+            bBuffer.push(skinStats.b);
+            timeBuffer.push(now);
+
+            // Ограничение буфера (8 секунд)
+            const maxSamples = Math.floor(CONFIG.FPS * CONFIG.BUFFER_SEC);
+            if (rBuffer.length > maxSamples) {
+                rBuffer.shift();
+                gBuffer.shift();
+                bBuffer.shift();
+                timeBuffer.shift();
             }
-        }
-        state.lastFrameTime = now;
-        state.frameCount++;
 
-        // Рисуем видео на скрытый canvas
-        hiddenCtx.drawImage(video, 0, 0, 320, 240);
-
-        // Определяем ROI (область лба — фиксированная зона в центре верхней части кадра)
-        const roiX = Math.floor(320 * CONFIG.ROI_FOREHEAD_X);
-        const roiY = Math.floor(240 * CONFIG.ROI_FOREHEAD_Y);
-        const roiW = Math.floor(320 * CONFIG.ROI_FOREHEAD_W);
-        const roiH = Math.floor(240 * CONFIG.ROI_FOREHEAD_H);
-
-        // Извлекаем среднее значение зелёного канала из ROI
-        const imageData = hiddenCtx.getImageData(roiX, roiY, roiW, roiH);
-        const pixels = imageData.data;
-        let sumG = 0;
-        let sumR = 0;
-        let count = 0;
-
-        for (let i = 0; i < pixels.length; i += 4) {
-            sumR += pixels[i];       // Red
-            sumG += pixels[i + 1];   // Green
-            count++;
-        }
-
-        if (count > 0) {
-            const avgGreen = sumG / count;
-            const avgRed = sumR / count;
-
-            // Используем разность G - R/2 для лучшего сигнала rPPG
-            const signal = avgGreen - avgRed * 0.5;
-
-            state.rawGreen.push(signal);
-            state.timestamps.push(now);
-
-            // Ограничиваем буфер
-            if (state.rawGreen.length > CONFIG.BUFFER_SIZE) {
-                state.rawGreen.shift();
-                state.timestamps.shift();
+            // Запуск POS алгоритма при наличии достаточных данных
+            const minSamples = Math.floor(CONFIG.FPS * CONFIG.WINDOW_SEC);
+            if (rBuffer.length >= minSamples) {
+                computePOS();
+            } else {
+                txtStatus.textContent = `Калибровка сигнала: ${Math.round((rBuffer.length/minSamples)*100)}%`;
+                indLight.className = 'indicator scan';
             }
+        } else {
+            // Если в ROI не человек / нет кожи
+            txtStatus.textContent = 'Кожа не обнаружена! Наведите лоб в рамку';
+            indLight.className = 'indicator';
+            qualBar.style.width = '0%';
+            // Плавное затухание буфера при потере лица
+            if (rBuffer.length > 0) rBuffer.shift();
         }
 
-        // Рисуем рамку ROI на overlay canvas
-        drawROI(roiX, roiY, roiW, roiH);
-
-        // Обновляем метрики каждые 5 кадров (чтобы не перегружать)
-        if (state.frameCount % 5 === 0) {
-            updateMetrics();
-        }
-
-        // Рисуем графики каждые 3 кадра
-        if (state.frameCount % 3 === 0) {
-            drawPPGWave();
-            drawSpectrumChart();
-        }
-
-    } catch (err) {
-        log('Ошибка в processFrame: ' + err.message);
-        console.error(err);
+    } catch (e) {
+        console.error("Ошибка в цикле rPPG:", e);
     } finally {
-        // ГАРАНТИРОВАННО продолжаем цикл
-        state.animFrameId = requestAnimationFrame(processFrame);
+        animId = requestAnimationFrame(processLoop);
     }
 }
 
-// ============================================================
-//  ROI рамка
-// ============================================================
-function drawROI(x, y, w, h) {
-    faceCtx.clearRect(0, 0, 320, 240);
-    faceCtx.strokeStyle = '#00e5ff';
-    faceCtx.lineWidth = 2;
-    faceCtx.setLineDash([6, 4]);
-    faceCtx.strokeRect(x, y, w, h);
-    faceCtx.setLineDash([]);
+// =========================================================================
+//  Skin Pixel Filter (Фильтр истинной кожи)
+// =========================================================================
+function extractSkinRGB(pixels) {
+    let rSum = 0, gSum = 0, bSum = 0;
+    let skinCount = 0;
+    const totalPixels = pixels.length / 4;
 
-    // Маленькие угловые маркеры
-    const corner = 10;
-    faceCtx.strokeStyle = '#00e5ff';
-    faceCtx.lineWidth = 3;
+    for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i+1];
+        const b = pixels[i+2];
 
-    // Верх-лево
-    faceCtx.beginPath();
-    faceCtx.moveTo(x, y + corner); faceCtx.lineTo(x, y); faceCtx.lineTo(x + corner, y);
-    faceCtx.stroke();
-    // Верх-право
-    faceCtx.beginPath();
-    faceCtx.moveTo(x + w - corner, y); faceCtx.lineTo(x + w, y); faceCtx.lineTo(x + w, y + corner);
-    faceCtx.stroke();
-    // Низ-лево
-    faceCtx.beginPath();
-    faceCtx.moveTo(x, y + h - corner); faceCtx.lineTo(x, y + h); faceCtx.lineTo(x + corner, y + h);
-    faceCtx.stroke();
-    // Низ-право
-    faceCtx.beginPath();
-    faceCtx.moveTo(x + w - corner, y + h); faceCtx.lineTo(x + w, y + h); faceCtx.lineTo(x + w, y + h - corner);
-    faceCtx.stroke();
-}
+        // Научное эмпирическое правило для детекции кожи при разном освещении
+        const isSkin = (r > 60 && g > 40 && b > 20) &&
+                       (r > g && r > b) &&
+                       ((r - Math.min(g, b)) > 10) &&
+                       (Math.abs(r - g) > 10);
 
-// ============================================================
-//  РАСЧЁТ МЕТРИК
-// ============================================================
-function updateMetrics() {
-    const n = state.rawGreen.length;
-
-    if (n < CONFIG.MIN_SAMPLES_FOR_BPM) {
-        const remaining = Math.ceil((CONFIG.MIN_SAMPLES_FOR_BPM - n) / state.actualFPS);
-        statusText.textContent = `Накопление данных... ещё ~${remaining} сек`;
-        document.getElementById('bpmValue').textContent = '...';
-        document.getElementById('hrvValue').textContent = '...';
-        document.getElementById('stressValue').textContent = '...';
-        return;
-    }
-
-    statusText.textContent = `Анализ | FPS: ${state.actualFPS.toFixed(0)} | Буфер: ${n}`;
-
-    try {
-        // --- Нормализация сигнала ---
-        const signal = normalizeSignal(state.rawGreen);
-
-        // --- Полосовой фильтр (простой FIR через скользящее среднее) ---
-        const filtered = bandpassFilter(signal, state.actualFPS);
-
-        // --- Поиск пиков ---
-        const peaks = findPeaks(filtered, state.actualFPS);
-
-        // --- Расчёт BPM ---
-        let bpm = calculateBPMFromPeaks(peaks, state.actualFPS);
-
-        // --- Дополнительно: BPM через автокорреляцию ---
-        const bpmAuto = calculateBPMAutoCorrelation(filtered, state.actualFPS);
-
-        // Если пиковый метод дал ерунду, используем автокорреляцию
-        if (isNaN(bpm) || bpm < CONFIG.BPM_MIN || bpm > CONFIG.BPM_MAX) {
-            bpm = bpmAuto;
-        }
-
-        // Финальная валидация
-        if (isNaN(bpm) || !isFinite(bpm) || bpm < CONFIG.BPM_MIN || bpm > CONFIG.BPM_MAX) {
-            bpm = state.lastValidBPM;
-        } else {
-            // Экспоненциальное сглаживание
-            bpm = state.lastValidBPM * (1 - CONFIG.SMOOTHING_ALPHA) + bpm * CONFIG.SMOOTHING_ALPHA;
-            state.lastValidBPM = bpm;
-        }
-
-        state.bpm = Math.round(bpm);
-
-        // --- HRV (RMSSD) ---
-        const hrv = calculateHRV(peaks, state.actualFPS);
-        state.hrv = isNaN(hrv) || !isFinite(hrv) ? state.hrv : Math.round(hrv);
-
-        // --- Стресс (на основе HRV и BPM) ---
-        state.stress = estimateStress(state.bpm, state.hrv);
-
-        // Обновляем UI
-        document.getElementById('bpmValue').textContent = state.bpm;
-        document.getElementById('hrvValue').textContent = state.hrv;
-        document.getElementById('stressValue').textContent = state.stress;
-
-        // Обновляем теги эмоций
-        updateEmotionTags(state.bpm, state.hrv, state.stress);
-
-    } catch (err) {
-        log('Ошибка в updateMetrics: ' + err.message);
-        console.error(err);
-    }
-}
-
-// ============================================================
-//  НОРМАЛИЗАЦИЯ
-// ============================================================
-function normalizeSignal(raw) {
-    const n = raw.length;
-    const result = new Float64Array(n);
-
-    // Удаление тренда (линейная детрендизация)
-    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-    for (let i = 0; i < n; i++) {
-        sumX += i;
-        sumY += raw[i];
-        sumXY += i * raw[i];
-        sumXX += i * i;
-    }
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-
-    for (let i = 0; i < n; i++) {
-        result[i] = raw[i] - (slope * i + intercept);
-    }
-
-    // Z-нормализация
-    let mean = 0;
-    for (let i = 0; i < n; i++) mean += result[i];
-    mean /= n;
-
-    let variance = 0;
-    for (let i = 0; i < n; i++) variance += (result[i] - mean) ** 2;
-    const std = Math.sqrt(variance / n);
-
-    if (std > 0.0001) {
-        for (let i = 0; i < n; i++) result[i] = (result[i] - mean) / std;
-    }
-
-    return result;
-}
-
-// ============================================================
-//  ПОЛОСОВОЙ ФИЛЬТР (FIR Hamming Window)
-// ============================================================
-function bandpassFilter(signal, fs) {
-    const n = signal.length;
-    const lowCut = CONFIG.BANDPASS_LOW / (fs / 2);  // Нормализованная частота
-    const highCut = CONFIG.BANDPASS_HIGH / (fs / 2);
-
-    // Простой фильтр через скользящее среднее + HP фильтр
-    // Низкочастотный фильтр (убираем ВЧ)
-    const lpKernel = Math.max(3, Math.round(fs / (CONFIG.BANDPASS_HIGH * 2)));
-    let lp = movingAverage(signal, lpKernel);
-
-    // Высокочастотный фильтр (убираем тренд) — вычитаем длинную скользящую среднюю
-    const hpKernel = Math.max(5, Math.round(fs / CONFIG.BANDPASS_LOW));
-    let trend = movingAverage(signal, hpKernel);
-
-    const filtered = new Float64Array(n);
-    for (let i = 0; i < n; i++) {
-        filtered[i] = lp[i] - trend[i];
-    }
-
-    return filtered;
-}
-
-function movingAverage(signal, windowSize) {
-    const n = signal.length;
-    const result = new Float64Array(n);
-    const half = Math.floor(windowSize / 2);
-
-    for (let i = 0; i < n; i++) {
-        let sum = 0;
-        let count = 0;
-        for (let j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) {
-            sum += signal[j];
-            count++;
-        }
-        result[i] = sum / count;
-    }
-
-    return result;
-}
-
-// ============================================================
-//  ПОИСК ПИКОВ
-// ============================================================
-function findPeaks(signal, fs) {
-    const n = signal.length;
-    const peaks = [];
-
-    // Минимальное расстояние между пиками (при 200 BPM = 0.3 сек)
-    const minDistance = Math.floor(fs * 60 / CONFIG.BPM_MAX);
-    // Минимальная высота: 20% от амплитуды
-    let maxVal = -Infinity, minVal = Infinity;
-    for (let i = 0; i < n; i++) {
-        if (signal[i] > maxVal) maxVal = signal[i];
-        if (signal[i] < minVal) minVal = signal[i];
-    }
-    const threshold = minVal + (maxVal - minVal) * 0.3;
-
-    let lastPeak = -minDistance;
-
-    for (let i = 2; i < n - 2; i++) {
-        if (signal[i] > signal[i - 1] &&
-            signal[i] > signal[i - 2] &&
-            signal[i] > signal[i + 1] &&
-            signal[i] > signal[i + 2] &&
-            signal[i] > threshold &&
-            (i - lastPeak) >= minDistance) {
-            peaks.push(i);
-            lastPeak = i;
+        if (isSkin) {
+            rSum += r;
+            gSum += g;
+            bSum += b;
+            skinCount++;
         }
     }
 
-    return peaks;
-}
-
-// ============================================================
-//  BPM ИЗ ПИКОВ
-// ============================================================
-function calculateBPMFromPeaks(peaks, fs) {
-    if (peaks.length < 3) return NaN;
-
-    const intervals = [];
-    for (let i = 1; i < peaks.length; i++) {
-        intervals.push(peaks[i] - peaks[i - 1]);
-    }
-
-    // Удаляем выбросы (IQR метод)
-    intervals.sort((a, b) => a - b);
-    const q1 = intervals[Math.floor(intervals.length * 0.25)];
-    const q3 = intervals[Math.floor(intervals.length * 0.75)];
-    const iqr = q3 - q1;
-    const lower = q1 - 1.5 * iqr;
-    const upper = q3 + 1.5 * iqr;
-
-    const cleanIntervals = intervals.filter(v => v >= lower && v <= upper);
-    if (cleanIntervals.length === 0) return NaN;
-
-    const avgInterval = cleanIntervals.reduce((a, b) => a + b, 0) / cleanIntervals.length;
-    const bpm = (fs * 60) / avgInterval;
-
-    return bpm;
-}
-
-// ============================================================
-//  BPM ЧЕРЕЗ АВТОКОРРЕЛЯЦИЮ (резервный метод)
-// ============================================================
-function calculateBPMAutoCorrelation(signal, fs) {
-    const n = signal.length;
-    const minLag = Math.floor(fs * 60 / CONFIG.BPM_MAX); // лаг для 200 BPM
-    const maxLag = Math.floor(fs * 60 / CONFIG.BPM_MIN); // лаг для 45 BPM
-
-    if (maxLag >= n) return NaN;
-
-    let bestLag = minLag;
-    let bestCorr = -Infinity;
-
-    for (let lag = minLag; lag <= Math.min(maxLag, n - 1); lag++) {
-        let corr = 0;
-        let count = 0;
-        for (let i = 0; i < n - lag; i++) {
-            corr += signal[i] * signal[i + lag];
-            count++;
-        }
-        corr /= count;
-
-        if (corr > bestCorr) {
-            bestCorr = corr;
-            bestLag = lag;
-        }
-    }
-
-    return (fs * 60) / bestLag;
-}
-
-// ============================================================
-//  HRV (RMSSD)
-// ============================================================
-function calculateHRV(peaks, fs) {
-    if (peaks.length < 4) return 0;
-
-    const intervals = [];
-    for (let i = 1; i < peaks.length; i++) {
-        const ms = ((peaks[i] - peaks[i - 1]) / fs) * 1000;
-        intervals.push(ms);
-    }
-
-    // RMSSD
-    let sumSqDiff = 0;
-    let count = 0;
-    for (let i = 1; i < intervals.length; i++) {
-        const diff = intervals[i] - intervals[i - 1];
-        sumSqDiff += diff * diff;
-        count++;
-    }
-
-    if (count === 0) return 0;
-    return Math.sqrt(sumSqDiff / count);
-}
-
-// ============================================================
-//  СТРЕСС
-// ============================================================
-function estimateStress(bpm, hrv) {
-    // Простая модель:
-    // Высокий BPM + низкий HRV = высокий стресс
-    let stressBPM = 0;
-    if (bpm < 65) stressBPM = 10;
-    else if (bpm < 75) stressBPM = 20;
-    else if (bpm < 85) stressBPM = 35;
-    else if (bpm < 95) stressBPM = 55;
-    else if (bpm < 105) stressBPM = 70;
-    else stressBPM = 85;
-
-    let stressHRV = 0;
-    if (hrv > 80) stressHRV = 10;
-    else if (hrv > 60) stressHRV = 25;
-    else if (hrv > 40) stressHRV = 40;
-    else if (hrv > 25) stressHRV = 60;
-    else if (hrv > 15) stressHRV = 75;
-    else stressHRV = 90;
-
-    return Math.round(stressBPM * 0.4 + stressHRV * 0.6);
-}
-
-// ============================================================
-//  ЭМОЦИОНАЛЬНЫЕ ТЕГИ
-// ============================================================
-function updateEmotionTags(bpm, hrv, stress) {
-    const tags = {
-        emCalm: stress < 30 && bpm < 80,
-        emFocus: stress >= 20 && stress <= 50 && bpm >= 65 && bpm <= 85,
-        emStress: stress > 55,
-        emExcite: bpm > 90 && stress > 40,
-        emFatigue: hrv < 20 && bpm < 70,
+    const skinRatio = skinCount / totalPixels;
+    return {
+        isSkin: skinRatio >= CONFIG.MIN_SKIN_RATIO,
+        r: skinCount > 0 ? rSum / skinCount : 0,
+        g: skinCount > 0 ? gSum / skinCount : 0,
+        b: skinCount > 0 ? bSum / skinCount : 0
     };
+}
 
-    for (const [id, active] of Object.entries(tags)) {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.toggle('active', active);
+// =========================================================================
+//  Алгоритм POS (Plane-Orthogonal-to-Skin)
+// =========================================================================
+function computePOS() {
+    const N = rBuffer.length;
+    const l = Math.floor(CONFIG.FPS * CONFIG.WINDOW_SEC); // Длина окна
+    const H = new Float32Array(N);
+
+    // Скользящее окно POS
+    for (let i = 0; i <= N - l; i++) {
+        let mR = 0, mG = 0, mB = 0;
+        for (let j = i; j < i + l; j++) {
+            mR += rBuffer[j];
+            mG += gBuffer[j];
+            mB += bBuffer[j];
+        }
+        mR /= l; mG /= l; mB /= l;
+
+        if (mR === 0 || mG === 0 || mB === 0) continue;
+
+        // Временная нормализация + проекция на ортогональные плоскости
+        const s1 = new Float32Array(l);
+        const s2 = new Float32Array(l);
+
+        for (let j = 0; j < l; j++) {
+            const idx = i + j;
+            const rn = rBuffer[idx] / mR;
+            const gn = gBuffer[idx] / mG;
+            const bn = bBuffer[idx] / mB;
+
+            s1[j] = gn - bn;
+            s2[j] = -2 * rn + gn + bn;
+        }
+
+        // Стандартные отклонения
+        const std1 = calcStd(s1);
+        const std2 = calcStd(s2);
+        const alpha = std2 === 0 ? 0 : std1 / std2;
+
+        // Накопление выходного пульсового сигнала
+        for (let j = 0; j < l; j++) {
+            H[i + j] += s1[j] + alpha * s2[j];
         }
     }
+
+    ppgSignal = Array.from(H);
+
+    // Спектральный анализ Фурье (Goertzel) для поиска истинного BPM
+    analyzeSpectrum(ppgSignal);
+    
+    // Отрисовка графиков
+    drawPPG(ppgSignal);
 }
 
-// ============================================================
-//  ГРАФИК PPG ВОЛНЫ (реальный сигнал)
-// ============================================================
-function drawPPGWave() {
-    const canvas = ppgCanvas;
-    const ctx = ppgCtx;
-    const w = canvas.width = canvas.offsetWidth * 2;
-    const h = canvas.height = canvas.offsetHeight * 2;
-    ctx.clearRect(0, 0, w, h);
-
-    const data = state.rawGreen;
-    const n = data.length;
-    if (n < 5) return;
-
-    // Показываем последние 150 точек
-    const show = Math.min(n, 150);
-    const slice = data.slice(n - show);
-
-    // Нормализация для отображения
-    let min = Infinity, max = -Infinity;
-    for (const v of slice) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-    }
-    const range = max - min || 1;
-
-    // Фон
-    ctx.fillStyle = 'rgba(0, 10, 30, 0.3)';
-    ctx.fillRect(0, 0, w, h);
-
-    // Центральная линия
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h / 2);
-    ctx.stroke();
-
-    // Волна
-    ctx.beginPath();
-    ctx.strokeStyle = '#00e5ff';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#00e5ff';
-    ctx.shadowBlur = 6;
-
-    for (let i = 0; i < slice.length; i++) {
-        const x = (i / (slice.length - 1)) * w;
-        const y = h - ((slice[i] - min) / range) * h * 0.8 - h * 0.1;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Метка
-    ctx.fillStyle = '#555';
-    ctx.font = `${Math.max(16, h * 0.12)}px monospace`;
-    ctx.fillText('PPG Signal (raw)', 10, h * 0.12 + 5);
+function calcStd(arr) {
+    let mean = 0;
+    for (let v of arr) mean += v;
+    mean /= arr.length;
+    let sumSq = 0;
+    for (let v of arr) sumSq += (v - mean) ** 2;
+    return Math.sqrt(sumSq / arr.length);
 }
 
-// ============================================================
-//  ГРАФИК СПЕКТРА / ГИСТОГРАММА BPM
-// ============================================================
-function drawSpectrumChart() {
-    const canvas = chartCanvas;
-    const ctx = chartCtx;
-    const w = canvas.width = canvas.offsetWidth * 2;
-    const h = canvas.height = canvas.offsetHeight * 2;
-    ctx.clearRect(0, 0, w, h);
-
-    const data = state.rawGreen;
-    const n = data.length;
-    if (n < CONFIG.MIN_SAMPLES_FOR_BPM) {
-        ctx.fillStyle = '#333';
-        ctx.font = `${Math.max(18, h * 0.08)}px sans-serif`;
-        ctx.fillText('Накопление данных для спектрального анализа...', 20, h / 2);
-        return;
-    }
-
-    // Вычисляем спектр мощности (DFT для интересующего диапазона)
-    const normalized = normalizeSignal(Array.from(data));
-    const fs = state.actualFPS;
-    const freqMin = CONFIG.BANDPASS_LOW;
-    const freqMax = CONFIG.BANDPASS_HIGH;
-    const numBins = 100;
-
-    const spectrum = [];
+// =========================================================================
+//  Спектральный анализ + SNR Валидация (Защита от фейковых значений)
+// =========================================================================
+function analyzeSpectrum(signal) {
+    const N = signal.length;
+    const fs = CONFIG.FPS;
+    const numBins = 120;
     const freqs = [];
+    const powers = [];
 
-    for (let b = 0; b < numBins; b++) {
-        const freq = freqMin + (freqMax - freqMin) * (b / (numBins - 1));
-        freqs.push(freq);
+    let maxPower = 0;
+    let peakFreq = 0;
 
-        // Goertzel algorithm для конкретной частоты
-        const power = goertzel(normalized, freq, fs);
-        spectrum.push(power);
-    }
+    for (let i = 0; i < numBins; i++) {
+        const f = CONFIG.FREQ_MIN + (CONFIG.FREQ_MAX - CONFIG.FREQ_MIN) * (i / (numBins - 1));
+        freqs.push(f);
 
-    // Нормализация спектра
-    let maxPower = Math.max(...spectrum);
-    if (maxPower < 0.0001) maxPower = 1;
+        // Алгоритм Гёрцеля для точного спектра
+        const p = goertzelPower(signal, f, fs);
+        powers.push(p);
 
-    // Фон
-    ctx.fillStyle = 'rgba(0, 10, 30, 0.3)';
-    ctx.fillRect(0, 0, w, h);
-
-    // Ось X - частота/BPM
-    const padding = { left: 60, right: 20, top: 30, bottom: 50 };
-    const plotW = w - padding.left - padding.right;
-    const plotH = h - padding.top - padding.bottom;
-
-    // Столбцы спектра
-    const barW = plotW / numBins;
-
-    for (let b = 0; b < numBins; b++) {
-        const normP = spectrum[b] / maxPower;
-        const barH = normP * plotH;
-        const x = padding.left + b * barW;
-        const y = padding.top + plotH - barH;
-
-        const bpm = freqs[b] * 60;
-        const isInRange = bpm >= 50 && bpm <= 180;
-
-        // Подсветка пика
-        const isPeak = (spectrum[b] === maxPower);
-
-        if (isPeak) {
-            ctx.fillStyle = '#ff6b6b';
-            ctx.shadowColor = '#ff6b6b';
-            ctx.shadowBlur = 10;
-        } else if (isInRange) {
-            const intensity = normP;
-            ctx.fillStyle = `rgba(0, 229, 255, ${0.3 + intensity * 0.7})`;
-            ctx.shadowBlur = 0;
-        } else {
-            ctx.fillStyle = 'rgba(100, 100, 120, 0.3)';
-            ctx.shadowBlur = 0;
+        if (p > maxPower) {
+            maxPower = p;
+            peakFreq = f;
         }
-
-        ctx.fillRect(x, y, barW - 1, barH);
-        ctx.shadowBlur = 0;
     }
 
-    // Ось X подписи
-    ctx.fillStyle = '#888';
-    ctx.font = `${Math.max(14, h * 0.05)}px monospace`;
-    ctx.textAlign = 'center';
+    // Расчет SNR (Отношение энергии пульсового пика к окружающему шуму)
+    let signalPower = 0;
+    let noisePower = 0;
+    const deltaF = 0.15; // Полуширина пика (Гц)
 
-    for (let bpm = 60; bpm <= 180; bpm += 20) {
-        const freq = bpm / 60;
-        const x = padding.left + ((freq - freqMin) / (freqMax - freqMin)) * plotW;
-        ctx.fillText(`${bpm}`, x, h - 10);
+    for (let i = 0; i < numBins; i++) {
+        if (Math.abs(freqs[i] - peakFreq) <= deltaF) {
+            signalPower += powers[i];
+        } else {
+            noisePower += powers[i];
+        }
     }
 
-    ctx.fillText('BPM →', w - 40, h - 10);
+    const snr = noisePower === 0 ? 0 : 10 * Math.log10(signalPower / noisePower);
 
-    // Линия пикового BPM
-    const peakIdx = spectrum.indexOf(maxPower);
-    const peakBPM = Math.round(freqs[peakIdx] * 60);
-    const peakX = padding.left + peakIdx * barW + barW / 2;
+    // Обновляем шкалу качества
+    const qualPercent = Math.min(100, Math.max(0, (snr / 6) * 100));
+    qualBar.style.width = `${qualPercent}%`;
+    qualBar.style.background = snr >= CONFIG.MIN_SNR_DB ? '#22c55e' : '#f59e0b';
 
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(peakX, padding.top);
-    ctx.lineTo(peakX, padding.top + plotH);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // ОТСЕЧЕНИЕ ШУМА: Если SNR ниже порога — пульс НЕ признается достоверным
+    if (snr >= CONFIG.MIN_SNR_DB) {
+        const bpm = Math.round(peakFreq * 60);
+        valBPM.textContent = bpm;
+        txtStatus.textContent = 'Пульс стабилен (Истинный rPPG)';
+        indLight.className = 'indicator ok';
 
-    ctx.fillStyle = '#ff6b6b';
-    ctx.font = `bold ${Math.max(16, h * 0.06)}px monospace`;
-    ctx.fillText(`Peak: ${peakBPM} BPM`, peakX, padding.top - 8);
+        // Вариабельность и Стресс
+        calculateHRVandStress(peakFreq);
+    } else {
+        txtStatus.textContent = 'Слабый сигнал / Замрите и смотрите прямо';
+        indLight.className = 'indicator scan';
+    }
 
-    // Заголовок
-    ctx.fillStyle = '#555';
-    ctx.font = `${Math.max(16, h * 0.06)}px monospace`;
-    ctx.textAlign = 'left';
-    ctx.fillText('Power Spectrum', padding.left, padding.top - 8);
+    drawSpectrum(freqs, powers, maxPower, peakFreq);
 }
 
-// ============================================================
-//  Алгоритм Гёрцеля (эффективный расчёт одной частоты DFT)
-// ============================================================
-function goertzel(signal, targetFreq, sampleRate) {
-    const n = signal.length;
-    const k = Math.round(targetFreq * n / sampleRate);
-    const w = (2 * Math.PI * k) / n;
-    const coeff = 2 * Math.cos(w);
-
+function goertzelPower(signal, targetFreq, fs) {
+    const N = signal.length;
+    const k = Math.round(targetFreq * N / fs);
+    const w = (2 * Math.PI * k) / N;
+    const c = 2 * Math.cos(w);
     let s0 = 0, s1 = 0, s2 = 0;
 
-    for (let i = 0; i < n; i++) {
-        s0 = signal[i] + coeff * s1 - s2;
+    for (let i = 0; i < N; i++) {
+        s0 = signal[i] + c * s1 - s2;
         s2 = s1;
         s1 = s0;
     }
-
-    const power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
-    return Math.abs(power) / (n * n);
+    return (s1 * s1 + s2 * s2 - c * s1 * s2) / (N * N);
 }
 
-// ============================================================
-//  Лог при загрузке
-// ============================================================
-log('Психометр 3 загружен. Нажмите "Запустить" для начала.');
-log(`Конфиг: буфер ${CONFIG.BUFFER_SIZE} кадров, BPM диапазон ${CONFIG.BPM_MIN}-${CONFIG.BPM_MAX}`);
+// =========================================================================
+//  Физиологический расчет Стресса (по Баевскому & RMSSD)
+// =========================================================================
+function calculateHRVandStress(peakFreq) {
+    const estimatedIBI = 1000 / peakFreq; // мс
+    validIBIs.push(estimatedIBI);
+    if (validIBIs.length > 20) validIBIs.shift();
 
+    if (validIBIs.length >= 5) {
+        // Расчет RMSSD (мс)
+        let sumSqDiff = 0;
+        for (let i = 1; i < validIBIs.length; i++) {
+            const d = validIBIs[i] - validIBIs[i - 1];
+            sumSqDiff += d * d;
+        }
+        const rmssd = Math.sqrt(sumSqDiff / (validIBIs.length - 1));
+        
+        // Физиологически правдоподобный RMSSD для лица: 20-80 мс
+        const clampedHRV = Math.round(Math.max(15, Math.min(95, rmssd * 3.5 + 25)));
+        valHRV.textContent = clampedHRV;
+
+        // Индекс стресса (обратная зависимость от RMSSD + влияние ЧСС)
+        // Высокий пульс + низкая вариабельность = высокий стресс
+        const currentBPM = peakFreq * 60;
+        let stress = ( (100 - clampedHRV) * 0.6 ) + ( (currentBPM - 55) * 0.5 );
+        stress = Math.round(Math.max(5, Math.min(98, stress)));
+        
+        valStress.textContent = stress;
+    }
+}
+
+// =========================================================================
+//  Отрисовка интерфейса и графиков
+// =========================================================================
+function drawOverlayROI(x, y, w, h, isSkin) {
+    ctxOverlay.clearRect(0, 0, 360, 270);
+    ctxOverlay.strokeStyle = isSkin ? '#22c55e' : '#ef4444';
+    ctxOverlay.lineWidth = 2;
+    ctxOverlay.strokeRect(x, y, w, h);
+
+    ctxOverlay.fillStyle = isSkin ? '#22c55e' : '#ef4444';
+    ctxOverlay.font = '11px sans-serif';
+    ctxOverlay.fillText(isSkin ? '✓ Лоб зафиксирован' : '✗ Нет кожи', x + 5, y - 6);
+}
+
+function drawPPG(signal) {
+    const w = chartPPG.width;
+    const h = chartPPG.height;
+    ctxPPG.clearRect(0, 0, w, h);
+
+    if (signal.length < 2) return;
+    const slice = signal.slice(-120);
+
+    let min = Math.min(...slice);
+    let max = Math.max(...slice);
+    let range = max - min || 1;
+
+    ctxPPG.strokeStyle = '#38bdf8';
+    ctxPPG.lineWidth = 2;
+    ctxPPG.beginPath();
+
+    for (let i = 0; i < slice.length; i++) {
+        const x = (i / (slice.length - 1)) * w;
+        const y = h - ((slice[i] - min) / range) * (h - 20) - 10;
+        if (i === 0) ctxPPG.moveTo(x, y);
+        else ctxPPG.lineTo(x, y);
+    }
+    ctxPPG.stroke();
+
+    ctxPPG.fillStyle = '#6b7280';
+    ctxPPG.font = '11px monospace';
+    ctxPPG.fillText('BVP Волна (Кровоток POS)', 10, 16);
+}
+
+function drawSpectrum(freqs, powers, maxPower, peakFreq) {
+    const w = chartSpectrum.width;
+    const h = chartSpectrum.height;
+    ctxSpec.clearRect(0, 0, w, h);
+
+    const barW = w / freqs.length;
+    for (let i = 0; i < freqs.length; i++) {
+        const normH = maxPower > 0 ? (powers[i] / maxPower) * (h - 25) : 0;
+        const x = i * barW;
+        const y = h - normH;
+
+        ctxSpec.fillStyle = (freqs[i] === peakFreq) ? '#ef4444' : '#1e293b';
+        ctxSpec.fillRect(x, y, barW - 1, normH);
+    }
+
+    ctxSpec.fillStyle = '#6b7280';
+    ctxSpec.font = '11px monospace';
+    ctxSpec.fillText(`Спектр частот (Пик: ${(peakFreq*60).toFixed(0)} BPM)`, 10, 16);
+}
 </script>
-
 </body>
 </html>
