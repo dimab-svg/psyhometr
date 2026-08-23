@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>rPPG Психометр — 30 сек</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:10px;overflow-x:hidden;min-height:100vh}
+h1{font-size:1.3rem;color:#38bdf8;margin-bottom:2px}
+.sub{font-size:.72rem;color:#6b7280;margin-bottom:10px;text-align:center}
+
+.cam-block{position:relative;width:340px;max-width:100%;height:255px;background:#000;border-radius:10px;overflow:hidden;border:2px solid #1e293b}
+video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+
+/* Прогресс измерения */
+.progress-ring{position:absolute;top:8px;right:8px;width:56px;height:56px;transform:scaleX(-1)}
+
+.stage-bar{width:340px;max-width:100%;margin-top:8px;background:#111827;border:1px solid #1e293b;border-radius:8px;padding:8px 12px;font-size:.78rem;display:flex;align-items:center;gap:8px}
+.stage-dot{width:10px;height:10px;border-radius:50%;background:#374151;transition:.3s}
+.stage-dot.active{background:#38bdf8;box-shadow:0 0 8px #38bdf8}
+.stage-dot.done{background:#22c55e}
+.stage-dot.fail{background:#ef4444}
+.stage-arrow{color:#374151;font-size:.6rem}
+
+.timer-big{font-size:2.4rem;font-weight:900;color:#38bdf8;text-align:center;margin:8px 0;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.timer-lbl{text-align:center;font-size:.7rem;color:#9ca3af;margin-top:-4px}
+
+/* Результаты */
+.results{width:340px;max-width:100%;margin-top:10px;display:none}
+.results.show{display:block}
+.res-main{background:linear-gradient(135deg,#0f1a2e,#111827);border:2px solid #1e293b;border-radius:12px;padding:16px;text-align:center;margin-bottom:8px}
+.res-bpm{font-size:3.5rem;font-weight:900;color:#38bdf8;line-height:1;margin:6px 0}
+.res-bpm-unit{font-size:.8rem;color:#9ca3af}
+.res-conf{margin-top:6px;font-size:.7rem;color:#6b7280}
+
+.stress-block{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:8px}
+.stress-lbl{font-size:.7rem;color:#9ca3af;text-transform:uppercase}
+.stress-val{font-size:2rem;font-weight:800;text-align:center;margin:4px 0}
+.stress-txt{font-size:.75rem;text-align:center;color:#d1d5db}
+.stress-bar{width:100%;height:12px;background:#1e293b;border-radius:6px;overflow:hidden;margin-top:8px;position:relative}
+.stress-bar::before{content:'';position:absolute;left:0;top:0;height:100%;width:100%;background:linear-gradient(90deg,#22c55e 0%,#eab308 40%,#f97316 65%,#ef4444 100%);opacity:.3}
+.stress-fill{height:100%;background:linear-gradient(90deg,#22c55e,#eab308,#f97316,#ef4444);border-radius:6px;transition:width .8s;position:relative;z-index:1}
+.stress-marker{position:absolute;top:-3px;width:4px;height:18px;background:#fff;border-radius:2px;box-shadow:0 0 6px rgba(255,255,255,.6);transition:left .8s;z-index:2}
+
+.details{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.detail{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:8px 10px}
+.detail-lbl{font-size:.62rem;color:#9ca3af;text-transform:uppercase}
+.detail-val{font-size:1.1rem;font-weight:700;color:#38bdf8;margin-top:2px}
+.detail-desc{font-size:.6rem;color:#6b7280;margin-top:1px}
+
+/* Спектр */
+canvas.chart{width:100%;height:100px;background:#111827;border:1px solid #1e293b;border-radius:8px;margin-bottom:8px}
+
+.ctr{margin-top:8px;display:flex;gap:8px;justify-content:center}
+button{background:#0284c7;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-weight:600;cursor:pointer;font-size:.9rem}
+button:hover{background:#0369a1}
+button.off{background:#dc2626}
+button.big{padding:14px 32px;font-size:1rem}
+button:disabled{background:#374151;cursor:not-allowed}
+
+.warn{color:#f59e0b;font-size:.62rem;text-align:center;margin-top:6px;max-width:340px;line-height:1.4}
+.instruction{background:#0f172a;border:1px solid #1e40af;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:.72rem;color:#93c5fd;max-width:340px;line-height:1.4;text-align:center}
+</style>
+</head>
+<body>
+<h1>🫀 rPPG Психометр</h1>
+<div class="sub">Измерение пульса и стресса за 30 секунд</div>
+
+<div class="cam-block">
+ <video id="vid" autoplay playsinline muted></video>
+ <canvas id="ov" width="340" height="255"></canvas>
+ <svg class="progress-ring" id="ring" viewBox="0 0 56 56">
+  <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="4"/>
+  <circle cx="28" cy="28" r="24" fill="none" stroke="#38bdf8" stroke-width="4"
+   stroke-dasharray="150.8" stroke-dashoffset="150.8" id="ringProgress"
+   transform="rotate(-90 28 28)" stroke-linecap="round"/>
+  <text x="28" y="33" text-anchor="middle" fill="#38bdf8" font-size="16" font-weight="bold" id="ringText">30</text>
+ </svg>
+</div>
+
+<div class="stage-bar">
+ <span class="stage-dot" id="stg1"></span><span>Поиск лица</span>
+ <span class="stage-arrow">→</span>
+ <span class="stage-dot" id="stg2"></span><span>Калибровка</span>
+ <span class="stage-arrow">→</span>
+ <span class="stage-dot" id="stg3"></span><span>Измерение</span>
+ <span class="stage-arrow">→</span>
+ <span class="stage-dot" id="stg4"></span><span>Анализ</span>
+</div>
+
+<div class="timer-big" id="timerBig">--</div>
+<div class="timer-lbl" id="timerLbl">Нажмите Старт для начала</div>
+
+<div class="instruction" id="instr">
+ 💡 Сядьте лицом к источнику света · Держите телефон на расстоянии 30–50 см ·
+ Не двигайтесь и не разговаривайте во время измерения
+</div>
+
+<!-- Результаты -->
+<div class="results" id="results">
+ <div class="res-main">
+  <div style="font-size:.75rem;color:#9ca3af;text-transform:uppercase">Средний пульс</div>
+  <div class="res-bpm" id="resBPM">--</div>
+  <div class="res-bpm-unit">ударов в минуту</div>
+  <div class="res-conf" id="resConf">Точность: --</div>
+ </div>
+
+ <div class="stress-block">
+  <div class="stress-lbl">🧠 Индекс стресса</div>
+  <div class="stress-val" id="resStress">--</div>
+  <div class="stress-txt" id="resStressTxt">--</div>
+  <div class="stress-bar">
+   <div class="stress-fill" id="stressFill" style="width:0%"></div>
+   <div class="stress-marker" id="stressMarker" style="left:0%"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:.6rem;color:#6b7280;margin-top:4px">
+   <span>Спокойствие</span><span>Норма</span><span>Напряжение</span><span>Стресс</span>
+  </div>
+ </div>
+
+ <div class="details">
+  <div class="detail">
+   <div class="detail-lbl">Дыхание</div>
+   <div class="detail-val" id="detResp">--</div>
+   <div class="detail-desc">вдохов/мин</div>
+  </div>
+  <div class="detail">
+   <div class="detail-lbl">Стабильность</div>
+   <div class="detail-val" id="detStab">--</div>
+   <div class="detail-desc">чёткость ритма</div>
+  </div>
+  <div class="detail">
+   <div class="detail-lbl">SNR сигнала</div>
+   <div class="detail-val" id="detSNR">--</div>
+   <div class="detail-desc">качество</div>
+  </div>
+  <div class="detail">
+   <div class="detail-lbl">Дрейф BPM</div>
+   <div class="detail-val" id="detDrift">--</div>
+   <div class="detail-desc">1-е vs 2-е окно</div>
+  </div>
+ </div>
+
+ <canvas id="cSpec" class="chart"></canvas>
+</div>
+
+<div class="ctr">
+ <button id="bStart" class="big">▶ Начать измерение</button>
+ <button id="bStop" class="off" style="display:none">⏹ Отмена</button>
+ <button id="bAgain" style="display:none">🔄 Повторить</button>
+</div>
+
+<div class="warn" id="warn"></div>
+
+<script>
+// =========================================================================
+//  КОНСТАНТЫ
+// =========================================================================
+const W=340, H=255;
+const FACE={x:.22,y:.10,w:.56,h:.50};
+const BG_ROIS=[
+ {x:.01,y:.01,w:.12,h:.12},{x:.87,y:.01,w:.12,h:.12},
+ {x:.01,y:.87,w:.12,h:.12},{x:.87,y:.87,w:.12,h:.12}
+];
+
+// Фазы (в секундах)
+const T_CALIB = 5;    // калибровка
+const T_WIN1  = 15;   // первое окно измерения
+const T_WIN2  = 15;   // второе окно измерения
+const T_TOTAL = T_CALIB + T_WIN1 + T_WIN2; // 35 сек
+
+// Частоты
+const FLO_HR = 0.7;   // 42 BPM
+const FHI_HR = 3.0;   // 180 BPM
+const FLO_RESP = 0.15; // 9 вдохов/мин
+const FHI_RESP = 0.5;  // 30 вдохов/мин
+
+// Motion
+const MOTION_MAX = 5.0;
+const MAX_MOTION_FRAMES = 20;
+
+// =========================================================================
+//  СОСТОЯНИЕ
+// =========================================================================
+let running=false, stm=null, raf=null;
+let phase='idle'; // idle | face | calib | measure | analyze | done
+let phaseStart=0;
+let sessionStart=0;
+
+// Буферы измерений
+let sigR=[], sigG=[], sigB=[], sigT=[];
+let bgR=[], bgG=[], bgB=[];
+let motionFrames=0;
+
+// FPS
+let fpsFrames=0, fpsT0=0, fps=25;
+
+// Motion tracking
+let prevSkinG=NaN;
+
+// Результаты
+let result = null;
+
+// DOM
+const vid=document.getElementById('vid');
+const ov=document.getElementById('ov');
+const co=ov.getContext('2d');
+const bStart=document.getElementById('bStart');
+const bStop=document.getElementById('bStop');
+const bAgain=document.getElementById('bAgain');
+const timerBig=document.getElementById('timerBig');
+const timerLbl=document.getElementById('timerLbl');
+const warn=document.getElementById('warn');
+const instr=document.getElementById('instr');
+const results=document.getElementById('results');
+const ringProgress=document.getElementById('ringProgress');
+const ringText=document.getElementById('ringText');
+const stg=[null,document.getElementById('stg1'),document.getElementById('stg2'),document.getElementById('stg3'),document.getElementById('stg4')];
+
+const resBPM=document.getElementById('resBPM');
+const resConf=document.getElementById('resConf');
+const resStress=document.getElementById('resStress');
+const resStressTxt=document.getElementById('resStressTxt');
+const stressFill=document.getElementById('stressFill');
+const stressMarker=document.getElementById('stressMarker');
+const detResp=document.getElementById('detResp');
+const detStab=document.getElementById('detStab');
+const detSNR=document.getElementById('detSNR');
+const detDrift=document.getElementById('detDrift');
+const cSpec=document.getElementById('cSpec');
+const xSpec=cSpec.getContext('2d');
+
+const hc=document.createElement('canvas');
+hc.width=W;hc.height=H;
+const hx=hc.getContext('2d',{willReadFrequently:true});
+
+bStart.onclick=startMeasurement;
+bStop.onclick=cancelMeasurement;
+bAgain.onclick=()=>{results.classList.remove('show');startMeasurement()};
+
+// =========================================================================
+//  СТАРТ / ОСТАНОВКА
+// =========================================================================
+async function startMeasurement(){
+ try{
+  if(!stm){
+   stm=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false
+   });
+   vid.srcObject=stm;
+   await vid.play();
+   // Даём камере стабилизироваться
+   await new Promise(r=>setTimeout(r,800));
+  }
+
+  resetSession();
+  running=true;
+  phase='face';
+  phaseStart=performance.now();
+  sessionStart=performance.now();
+
+  bStart.style.display='none';
+  bStop.style.display='';
+  bAgain.style.display='none';
+  results.classList.remove('show');
+  warn.textContent='';
+
+  setStage(1,'active');
+  loop();
+ }catch(e){
+  warn.textContent='Ошибка камеры: '+e.message;
+ }
+}
+
+function cancelMeasurement(){
+ running=false;
+ phase='idle';
+ bStart.style.display='';
+ bStop.style.display='none';
+ timerBig.textContent='--';
+ timerLbl.textContent='Измерение отменено';
+ [1,2,3,4].forEach(i=>setStage(i,''));
+ setRingProgress(0,'--');
+}
+
+function resetSession(){
+ sigR=[];sigG=[];sigB=[];sigT=[];
+ bgR=[];bgG=[];bgB=[];
+ motionFrames=0;prevSkinG=NaN;
+ fpsFrames=0;fpsT0=performance.now();fps=25;
+ result=null;
+ [1,2,3,4].forEach(i=>setStage(i,''));
+}
+
+function setStage(n,state){
+ stg[n].className='stage-dot'+(state?' '+state:'');
+}
+
+function setRingProgress(pct,text){
+ const circumference=150.8;
+ ringProgress.style.strokeDashoffset=circumference*(1-pct/100);
+ ringText.textContent=text;
+}
+
+// =========================================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// =========================================================================
+function loop(){
+ if(!running){return}
+
+ try{
+  const now=performance.now();
+  fpsFrames++;
+  if(now-fpsT0>2000){
+   fps=Math.max(10,fpsFrames/((now-fpsT0)/1000));
+   fpsFrames=0;fpsT0=now;
+  }
+
+  hx.drawImage(vid,0,0,W,H);
+  const px=hx.getImageData(0,0,W,H).data;
+
+  // ===== ИЗВЛЕЧЕНИЕ ФОНА =====
+  let bR=0,bG=0,bB=0,bN=0;
+  for(const roi of BG_ROIS){
+   const rx=Math.floor(W*roi.x),ry=Math.floor(H*roi.y);
+   const rw=Math.floor(W*roi.w),rh=Math.floor(H*roi.h);
+   let sr=0,sg=0,sb=0,c=0;
+   for(let y=ry;y<ry+rh;y+=2){
+    for(let x=rx;x<rx+rw;x+=2){
+     const i=(y*W+x)*4;
+     sr+=px[i];sg+=px[i+1];sb+=px[i+2];c++;
+    }
+   }
+   if(c>0){bR+=sr/c;bG+=sg/c;bB+=sb/c;bN++}
+  }
+  if(bN>0){bR/=bN;bG/=bN;bB/=bN}
+  else{bR=128;bG=128;bB=128}
+
+  // ===== ИЗВЛЕЧЕНИЕ КОЖИ =====
+  const fx=Math.floor(W*FACE.x),fy=Math.floor(H*FACE.y);
+  const fw=Math.floor(W*FACE.w),fh=Math.floor(H*FACE.h);
+  let sR=0,sG=0,sB=0,skinC=0,totalC=0;
+
+  for(let y=fy;y<fy+fh;y+=2){
+   for(let x=fx;x<fx+fw;x+=2){
+    totalC++;
+    const i=(y*W+x)*4;
+    const r=px[i],g=px[i+1],b=px[i+2];
+    if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
+     const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+     if(mx-mn>6){
+      let hue=0;const d=mx-mn;
+      if(mx===r)hue=60*((g-b)/d%6);
+      else if(mx===g)hue=60*((b-r)/d+2);
+      else hue=60*((r-g)/d+4);
+      if(hue<0)hue+=360;
+      if(hue<=55||hue>=335){
+       sR+=r;sG+=g;sB+=b;skinC++;
+      }
+     }
+    }
+   }
+  }
+
+  const skinRatio=skinC/Math.max(totalC,1);
+  const skinOk=skinRatio>.20;
+  const avgR=skinC>0?sR/skinC:0;
+  const avgG=skinC>0?sG/skinC:0;
+  const avgB=skinC>0?sB/skinC:0;
+
+  // ===== РИСУЕМ ROI =====
+  drawROI(fx,fy,fw,fh,skinOk,skinRatio);
+
+  // ===== ЛОГИКА ФАЗ =====
+  const elapsed=(now-phaseStart)/1000;
+  const totalElapsed=(now-sessionStart)/1000;
+
+  if(phase==='face'){
+   timerBig.textContent='';
+   timerLbl.textContent=skinOk?'Лицо найдено! Начинаем...':'Наведите лицо в рамку';
+   setRingProgress(0,'★');
+   if(skinOk){
+    // Переход к калибровке
+    setStage(1,'done');
+    phase='calib';
+    phaseStart=now;
+    setStage(2,'active');
+   }
+  }
+
+  else if(phase==='calib'){
+   const remain=Math.max(0,T_CALIB-elapsed);
+   timerBig.textContent=Math.ceil(remain);
+   timerLbl.textContent='Калибровка... не двигайтесь';
+   setRingProgress(elapsed/T_CALIB*100,Math.ceil(remain));
+
+   if(!skinOk){
+    warn.textContent='⚠ Лицо потеряно, начните сначала';
+    cancelMeasurement();
+    return;
+   }
+
+   if(elapsed>=T_CALIB){
+    setStage(2,'done');
+    phase='measure';
+    phaseStart=now;
+    setStage(3,'active');
+    sigR=[];sigG=[];sigB=[];sigT=[];bgR=[];bgG=[];bgB=[];
+    prevSkinG=avgG;
+    motionFrames=0;
+   }
+  }
+
+  else if(phase==='measure'){
+   const measTime=T_WIN1+T_WIN2;
+   const remain=Math.max(0,measTime-elapsed);
+   timerBig.textContent=Math.ceil(remain);
+
+   const which=elapsed<T_WIN1?'Окно 1/2':'Окно 2/2';
+   timerLbl.textContent=`Измерение · ${which} · замрите`;
+   setRingProgress(elapsed/measTime*100,Math.ceil(remain));
+
+   if(!skinOk){
+    warn.textContent='⚠ Лицо потеряно';
+    cancelMeasurement();
+    return;
+   }
+
+   // Motion detection
+   if(!isNaN(prevSkinG)){
+    if(Math.abs(avgG-prevSkinG)>MOTION_MAX){
+     motionFrames++;
+     if(motionFrames>MAX_MOTION_FRAMES){
+      warn.textContent='⚠ Слишком много движений — начните сначала';
+      cancelMeasurement();
+      return;
+     }
+    }
+   }
+   prevSkinG=avgG;
+
+   // Собираем данные
+   sigR.push(avgR);sigG.push(avgG);sigB.push(avgB);sigT.push(now);
+   bgR.push(bR);bgG.push(bG);bgB.push(bB);
+
+   if(elapsed>=measTime){
+    setStage(3,'done');
+    phase='analyze';
+    phaseStart=now;
+    setStage(4,'active');
+    timerLbl.textContent='Анализ данных...';
+    // Даём кадр на UI, потом анализ
+    setTimeout(()=>{
+     runAnalysis();
+    },100);
+   }
+  }
+
+ }catch(e){
+  console.error(e);
+  warn.textContent='Ошибка: '+e.message;
+ }
+
+ if(running && phase!=='analyze' && phase!=='done'){
+  raf=requestAnimationFrame(loop);
+ }
+}
+
+// =========================================================================
+//  АНАЛИЗ (главная логика)
+// =========================================================================
+function runAnalysis(){
+ try{
+  const N=sigG.length;
+  if(N<100){
+   warn.textContent='Недостаточно данных';
+   cancelMeasurement();return;
+  }
+
+  // Реальный FPS из timestamps
+  const totalT=(sigT[N-1]-sigT[0])/1000;
+  const realFps=N/totalT;
+
+  // ===== ПОСТРОЕНИЕ СИГНАЛА POS + Dual-ROI =====
+  const signal=buildSignal(sigR,sigG,sigB,bgR,bgG,bgB);
+
+  // ===== СПЛИТ НА ДВА ОКНА =====
+  const idxSplit=Math.floor(N*T_WIN1/(T_WIN1+T_WIN2));
+  const sig1=signal.slice(0,idxSplit);
+  const sig2=signal.slice(idxSplit);
+  const sigAll=signal;
+
+  // ===== СПЕКТРАЛЬНЫЙ АНАЛИЗ =====
+  const spec1=analyzeSpectrum(sig1,realFps,FLO_HR,FHI_HR);
+  const spec2=analyzeSpectrum(sig2,realFps,FLO_HR,FHI_HR);
+  const specAll=analyzeSpectrum(sigAll,realFps,FLO_HR,FHI_HR);
+
+  // ===== ДЫХАНИЕ (низкие частоты) =====
+  const specResp=analyzeSpectrum(sigAll,realFps,FLO_RESP,FHI_RESP);
+
+  // ===== СРЕДНИЙ BPM =====
+  // Используем взвешенное среднее двух окон + общее
+  const bpm1=spec1.peakF*60;
+  const bpm2=spec2.peakF*60;
+  const bpmAll=specAll.peakF*60;
+
+  // Проверка согласованности окон
+  const bpmDrift=Math.abs(bpm1-bpm2);
+  const bpmFinal=(bpm1+bpm2+bpmAll)/3;
+
+  // ===== ШИРИНА ПИКА (стабильность ритма) =====
+  const peakWidth=calcPeakWidth(specAll);
+  // Нормализуем: узкий пик (< 0.15 Гц) = стабильный, широкий (> 0.4 Гц) = аритмичный
+  const stability=Math.max(0,Math.min(100,(0.5-peakWidth)/0.35*100));
+
+  // ===== ДЫХАНИЕ =====
+  const respBPM=specResp.peakF*60; // вдохов в минуту
+  const respValid=respBPM>=8 && respBPM<=25;
+
+  // ===== SNR =====
+  const snr=specAll.snr;
+
+  // ===== ИНДЕКС СТРЕССА =====
+  // Комбинируем 4 параметра:
+  //  1. Абсолютный BPM (выше → больше стресса)
+  //  2. Стабильность (ниже → больше стресса)
+  //  3. Дрейф между окнами (больше → больше стресса)
+  //  4. Частота дыхания (выше → больше стресса)
+
+  let stressBPM;
+  if(bpmFinal<=60) stressBPM=10;
+  else if(bpmFinal<=70) stressBPM=20;
+  else if(bpmFinal<=78) stressBPM=32;
+  else if(bpmFinal<=86) stressBPM=45;
+  else if(bpmFinal<=95) stressBPM=60;
+  else if(bpmFinal<=105) stressBPM=75;
+  else stressBPM=88;
+
+  // Стабильность: чем меньше stability, тем больше стресса
+  const stressStab=100-stability;
+
+  // Дрейф
+  const stressDrift=Math.min(100,bpmDrift*8);
+
+  // Дыхание
+  let stressResp=30;
+  if(respValid){
+   if(respBPM<=12) stressResp=15;
+   else if(respBPM<=16) stressResp=30;
+   else if(respBPM<=20) stressResp=55;
+   else stressResp=75;
+  }
+
+  // Взвешенная сумма
+  const stressIdx=Math.round(
+   stressBPM  * 0.30 +
+   stressStab * 0.35 +
+   stressDrift* 0.15 +
+   stressResp * 0.20
+  );
+  const stressFinal=Math.max(5,Math.min(95,stressIdx));
+
+  // Категория
+  let stressCat, stressColor;
+  if(stressFinal<25){stressCat='Спокойствие';stressColor='#22c55e'}
+  else if(stressFinal<45){stressCat='Норма';stressColor='#eab308'}
+  else if(stressFinal<65){stressCat='Лёгкое напряжение';stressColor='#f97316'}
+  else if(stressFinal<80){stressCat='Напряжение';stressColor='#ef4444'}
+  else{stressCat='Высокий стресс';stressColor='#dc2626'}
+
+  // Уверенность (по SNR)
+  let conf;
+  if(snr>=3) conf='Высокая';
+  else if(snr>=1) conf='Средняя';
+  else if(snr>=-1) conf='Низкая';
+  else conf='Очень низкая';
+
+  // Сохраняем результат
+  result={
+   bpm: Math.round(bpmFinal),
+   bpm1: Math.round(bpm1),
+   bpm2: Math.round(bpm2),
+   drift: Math.round(bpmDrift),
+   stability: Math.round(stability),
+   respBPM: respValid?Math.round(respBPM):null,
+   snr: snr,
+   stress: stressFinal,
+   stressCat,
+   stressColor,
+   conf,
+   spec: specAll
+  };
+
+  showResults();
+
+ }catch(e){
+  console.error(e);
+  warn.textContent='Ошибка анализа: '+e.message;
+  cancelMeasurement();
+ }
+}
+
+// =========================================================================
+//  ПОСТРОЕНИЕ СИГНАЛА: POS + Dual-ROI + фильтрация
+// =========================================================================
+function buildSignal(sR,sG,sB,bR,bG,bB){
+ const N=sR.length;
+
+ // Dual-ROI нормализация (кожа / фон)
+ const nR=new Float64Array(N), nG=new Float64Array(N), nB=new Float64Array(N);
+ for(let i=0;i<N;i++){
+  nR[i]=bR[i]>5?sR[i]/bR[i]:sR[i]/128;
+  nG[i]=bG[i]>5?sG[i]/bG[i]:sG[i]/128;
+  nB[i]=bB[i]>5?sB[i]/bB[i]:sB[i]/128;
+ }
+
+ // POS алгоритм (Wang 2017) на всём буфере
+ // 1. Средние
+ let mR=0,mG=0,mB=0;
+ for(let i=0;i<N;i++){mR+=nR[i];mG+=nG[i];mB+=nB[i]}
+ mR/=N;mG/=N;mB/=N;
+
+ // 2. Нормализация
+ const normR=new Float64Array(N),normG=new Float64Array(N),normB=new Float64Array(N);
+ for(let i=0;i<N;i++){
+  normR[i]=nR[i]/mR-1;
+  normG[i]=nG[i]/mG-1;
+  normB[i]=nB[i]/mB-1;
+ }
+
+ // 3. POS проекции
+ const S1=new Float64Array(N),S2=new Float64Array(N);
+ for(let i=0;i<N;i++){
+  S1[i]=normG[i]-normB[i];
+  S2[i]=-2*normR[i]+normG[i]+normB[i];
+ }
+
+ // 4. Альфа = std(S1)/std(S2)
+ const std1=stdArr(S1),std2=stdArr(S2);
+ const alpha=std2>1e-8?std1/std2:0;
+
+ // 5. Итоговый сигнал
+ const H=new Float64Array(N);
+ for(let i=0;i<N;i++) H[i]=S1[i]+alpha*S2[i];
+
+ // Детренд + окно Ханна
+ const dt=detrend(H);
+ return dt;
+}
+
+function stdArr(a){
+ let m=0;for(let i=0;i<a.length;i++)m+=a[i];m/=a.length;
+ let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-m)**2;
+ return Math.sqrt(s/a.length);
+}
+
+function detrend(a){
+ const n=a.length,o=new Float64Array(n);
+ let sx=0,sy=0,sxy=0,sxx=0;
+ for(let i=0;i<n;i++){sx+=i;sy+=a[i];sxy+=i*a[i];sxx+=i*i}
+ const d=n*sxx-sx*sx;
+ if(Math.abs(d)<1e-10){o.set(a);return o}
+ const sl=(n*sxy-sx*sy)/d,ic=(sy-sl*sx)/n;
+ for(let i=0;i<n;i++)o[i]=a[i]-(sl*i+ic);
+ return o;
+}
+
+// =========================================================================
+//  СПЕКТРАЛЬНЫЙ АНАЛИЗ (Welch + Гёрцель + парабола)
+// =========================================================================
+function analyzeSpectrum(sig,fs,fLo,fHi){
+ const N=sig.length;
+ const bins=200;
+ const freqs=new Float64Array(bins);
+ const pow=new Float64Array(bins);
+
+ for(let i=0;i<bins;i++) freqs[i]=fLo+(fHi-fLo)*i/(bins-1);
+
+ // Welch: 3 сегмента с overlap 50%
+ const segLen=Math.min(N,Math.max(64,Math.floor(N*0.5)));
+ const step=Math.max(1,Math.floor(segLen*0.5));
+ const segs=[];
+ for(let s=0;s<=N-segLen;s+=step) segs.push(sig.slice(s,s+segLen));
+ if(segs.length===0) segs.push(sig.slice(-segLen));
+
+ for(const seg of segs){
+  const win=applyHann(seg);
+  for(let i=0;i<bins;i++) pow[i]+=goertzel(win,freqs[i],fs);
+ }
+ for(let i=0;i<bins;i++) pow[i]/=segs.length;
+
+ // Поиск пика
+ let pkI=0, pkP=0;
+ for(let i=0;i<bins;i++){
+  if(pow[i]>pkP){pkP=pow[i];pkI=i}
+ }
+
+ // Параболическая интерполяция
+ let peakF=freqs[pkI];
+ if(pkI>0&&pkI<bins-1){
+  const a=pow[pkI-1],b=pow[pkI],c=pow[pkI+1];
+  const d=a-2*b+c;
+  if(Math.abs(d)>1e-12){
+   const delta=0.5*(a-c)/d;
+   const fStep=(fHi-fLo)/(bins-1);
+   peakF=freqs[pkI]+delta*fStep;
+  }
+ }
+
+ // SNR (пик ±0.15 Гц vs остальное)
+ const hw=0.15;
+ let sE=0,nE=0,nS=0,nN=0;
+ for(let i=0;i<bins;i++){
+  if(Math.abs(freqs[i]-peakF)<=hw){sE+=pow[i];nS++}
+  else{nE+=pow[i];nN++}
+ }
+ const snr=10*Math.log10((nS?sE/nS:0)/(nN?nE/nN:1e-12));
+
+ return {freqs,pow,peakF,peakIdx:pkI,peakP:pkP,snr};
+}
+
+function applyHann(a){
+ const n=a.length,o=new Float64Array(n);
+ for(let i=0;i<n;i++)o[i]=a[i]*0.5*(1-Math.cos(2*Math.PI*i/(n-1)));
+ return o;
+}
+
+function goertzel(s,f,fs){
+ const N=s.length,k=Math.round(f*N/fs),w=2*Math.PI*k/N,c=2*Math.cos(w);
+ let s1=0,s2=0;
+ for(let i=0;i<N;i++){const s0=s[i]+c*s1-s2;s2=s1;s1=s0}
+ return Math.abs(s1*s1+s2*s2-c*s1*s2)/(N*N);
+}
+
+// Ширина пика на уровне -3dB
+function calcPeakWidth(spec){
+ const {pow,peakP,peakIdx,freqs}=spec;
+ const halfP=peakP*0.5; // -3dB = половина мощности
+
+ let lo=peakIdx, hi=peakIdx;
+ while(lo>0 && pow[lo]>halfP) lo--;
+ while(hi<pow.length-1 && pow[hi]>halfP) hi++;
+
+ return freqs[hi]-freqs[lo];
+}
+
+// =========================================================================
+//  ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ
+// =========================================================================
+function showResults(){
+ setStage(4,'done');
+ phase='done';
+ running=false;
+
+ timerBig.textContent='✓';
+ timerLbl.textContent='Измерение завершено';
+ setRingProgress(100,'✓');
+
+ bStart.style.display='none';
+ bStop.style.display='none';
+ bAgain.style.display='';
+
+ // Основные значения
+ resBPM.textContent=result.bpm;
+ resConf.textContent=`Точность: ${result.conf} (SNR ${result.snr.toFixed(1)} dB)`;
+
+ // Стресс
+ resStress.textContent=result.stress;
+ resStress.style.color=result.stressColor;
+ resStressTxt.textContent=result.stressCat;
+ stressFill.style.width=result.stress+'%';
+ stressMarker.style.left=`calc(${result.stress}% - 2px)`;
+
+ // Детали
+ detResp.textContent=result.respBPM || '--';
+ detStab.textContent=result.stability+'%';
+ detSNR.textContent=result.snr.toFixed(1)+' dB';
+ detDrift.textContent=result.drift+' BPM';
+
+ // Спектр
+ drawSpectrum(result.spec);
+
+ results.classList.add('show');
+ warn.textContent='';
+}
+
+// =========================================================================
+//  РИСОВАНИЕ
+// =========================================================================
+function drawROI(fx,fy,fw,fh,skinOk,ratio){
+ co.clearRect(0,0,W,H);
+ co.fillStyle='rgba(0,0,0,.4)';
+ co.fillRect(0,0,W,H);
+ co.clearRect(fx,fy,fw,fh);
+
+ const cl=skinOk?'#22c55e':'#ef4444';
+ co.strokeStyle=cl;co.lineWidth=2;
+ co.strokeRect(fx,fy,fw,fh);
+
+ const cn=14;
+ co.lineWidth=3;co.strokeStyle=cl;
+ co.beginPath();co.moveTo(fx,fy+cn);co.lineTo(fx,fy);co.lineTo(fx+cn,fy);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy);co.lineTo(fx+fw,fy);co.lineTo(fx+fw,fy+cn);co.stroke();
+ co.beginPath();co.moveTo(fx,fy+fh-cn);co.lineTo(fx,fy+fh);co.lineTo(fx+cn,fy+fh);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy+fh);co.lineTo(fx+fw,fy+fh);co.lineTo(fx+fw,fy+fh-cn);co.stroke();
+
+ // Фоновые ROI
+ co.strokeStyle='rgba(56,189,248,.35)';co.lineWidth=1;co.setLineDash([3,3]);
+ for(const r of BG_ROIS){
+  const bx=Math.floor(W*r.x),by=Math.floor(H*r.y);
+  const bw=Math.floor(W*r.w),bh=Math.floor(H*r.h);
+  co.clearRect(bx,by,bw,bh);
+  co.strokeRect(bx,by,bw,bh);
+ }
+ co.setLineDash([]);
+
+ co.font='bold 10px sans-serif';
+ co.fillStyle=cl;
+ co.fillText(skinOk?`✓ Лицо ${Math.round(ratio*100)}%`:`✗ Нет лица`,fx+3,fy-4);
+}
+
+function drawSpectrum(spec){
+ const w=cSpec.width=cSpec.clientWidth*2, h=cSpec.height=cSpec.clientHeight*2;
+ xSpec.clearRect(0,0,w,h);
+
+ const {freqs,pow,peakF,peakP}=spec;
+ const pad={l:40,r:10,t:22,b:22};
+ const pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+ const bw=pw/freqs.length;
+
+ for(let i=0;i<freqs.length;i++){
+  const nm=peakP>0?pow[i]/peakP:0;
+  const bh=nm*ph;
+  const isPk=Math.abs(freqs[i]-peakF)<0.04;
+  xSpec.fillStyle=isPk?'#ef4444':`rgba(56,189,248,${.15+nm*.55})`;
+  xSpec.fillRect(pad.l+i*bw, pad.t+ph-bh, Math.max(bw-1,1), bh);
+ }
+
+ // Подписи BPM
+ xSpec.fillStyle='#9ca3af';xSpec.font='10px monospace';xSpec.textAlign='center';
+ for(let b=60;b<=180;b+=30){
+  const f=b/60;
+  const px=pad.l+((f-FLO_HR)/(FHI_HR-FLO_HR))*pw;
+  xSpec.fillText(b+'',px,h-5);
+ }
+
+ // Пик
+ const pkX=pad.l+((peakF-FLO_HR)/(FHI_HR-FLO_HR))*pw;
+ xSpec.strokeStyle='#ef4444';xSpec.lineWidth=1.5;xSpec.setLineDash([4,3]);
+ xSpec.beginPath();xSpec.moveTo(pkX,pad.t);xSpec.lineTo(pkX,pad.t+ph);xSpec.stroke();xSpec.setLineDash([]);
+
+ xSpec.fillStyle='#ef4444';xSpec.font='bold 12px monospace';
+ xSpec.fillText(Math.round(peakF*60)+' BPM',pkX,pad.t-4);
+
+ xSpec.textAlign='left';xSpec.fillStyle='#6b7280';xSpec.font='11px monospace';
+ xSpec.fillText('Спектр пульса',pad.l,14);
+}
+</script>
+</body>
+</html>
