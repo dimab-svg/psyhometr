@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>rPPG v8 — Честный</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:8px;overflow-x:hidden}
+h1{font-size:1.15rem;color:#38bdf8}
+.sub{font-size:.68rem;color:#6b7280;margin-bottom:6px;text-align:center}
+.row{display:flex;gap:10px;max-width:900px;width:100%;flex-wrap:wrap;justify-content:center}
+.cam{position:relative;width:340px;height:255px;background:#000;border-radius:8px;overflow:hidden;border:2px solid #1e293b}
+video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+.cards{display:flex;flex-direction:column;gap:5px;width:220px}
+.cd{background:#111827;border:1px solid #1e293b;padding:6px 10px;border-radius:7px;text-align:center}
+.cd .t{font-size:.58rem;color:#9ca3af;text-transform:uppercase}
+.cd .v{font-size:1.7rem;font-weight:800;color:#38bdf8;margin:1px 0}
+.cd .u{font-size:.58rem;color:#6b7280}
+.cd.st .v{color:#f87171}.cd.hr .v{color:#4ade80}
+.hb{text-align:center;padding:4px}
+.heart{font-size:2.2rem;display:inline-block;opacity:.15;transform:scale(1);transition:transform .06s,opacity .06s}
+.heart.beat{opacity:1;transform:scale(1.3);filter:drop-shadow(0 0 12px #ef4444)}
+.bi{font-size:.62rem;color:#9ca3af;min-height:1.8em}
+.sb{width:100%;max-width:580px;background:#111827;border:1px solid #1e293b;padding:5px 10px;border-radius:5px;margin-top:5px;font-size:.7rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:4px}
+.dot.ok{background:#22c55e;box-shadow:0 0 5px #22c55e}
+.dot.w{background:#f59e0b;box-shadow:0 0 5px #f59e0b}
+.ch{width:100%;max-width:580px;margin-top:5px;display:flex;flex-direction:column;gap:4px}
+canvas.gc{width:100%;height:100px;background:#111827;border:1px solid #1e293b;border-radius:5px}
+.ctr{margin-top:6px;display:flex;gap:8px}
+button{background:#0284c7;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.8rem}
+button.off{background:#dc2626}
+.warn{color:#f59e0b;font-size:.65rem;text-align:center;margin-top:4px;max-width:580px}
+</style>
+</head>
+<body>
+<h1>🫀 rPPG v8 — Честный пульс</h1>
+<div class="sub">Без интерполяции · Без фейковых ударов · Только реальные пики</div>
+
+<div class="row">
+ <div class="cam">
+  <video id="vid" autoplay playsinline muted></video>
+  <canvas id="ov" width="340" height="255"></canvas>
+ </div>
+ <div class="cards">
+  <div class="cd"><div class="t">❤️ Пульс</div><div class="v" id="vB">--</div><div class="u">BPM (реальный)</div></div>
+  <div class="cd hb"><span class="heart" id="hrt">❤️</span><div class="bi" id="bi">Ожидание...</div></div>
+  <div class="cd hr"><div class="t">HRV</div><div class="v" id="vH">--</div><div class="u">RMSSD мс</div></div>
+  <div class="cd st"><div class="t">Стресс</div><div class="v" id="vS">--</div><div class="u">0–100</div></div>
+ </div>
+</div>
+
+<div class="sb">
+ <div><span class="dot" id="dot"></span><span id="stT">Старт</span></div>
+ <div><span id="fpL" style="color:#555"></span> <span id="ampL" style="color:#555"></span></div>
+</div>
+
+<div class="ch">
+ <canvas id="cP" class="gc"></canvas>
+ <canvas id="cR" class="gc"></canvas>
+</div>
+
+<div class="ctr">
+ <button id="bOn">▶ Старт</button>
+ <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
+</div>
+<div class="warn">⚠ Эта версия НЕ интерполирует удары. Если пульс не определяется — значит, сигнала недостаточно. Держите телефон неподвижно, свет на лицо.</div>
+
+<script>
+// =========================================================================
+//  v8 — ЧЕСТНЫЙ rPPG
+//  Принципы:
+//  1. Никакой интерполяции — только реальные пики
+//  2. IIR считается ОДИН раз (не пересчитывается!)
+//  3. Прогрев 5 секунд перед детекцией
+//  4. Проверка амплитуды сигнала
+//  5. Простой зелёный канал с Dual-ROI нормализацией
+// =========================================================================
+
+const W=340,H=255;
+const FACE={x:.22,y:.10,w:.56,h:.50};
+const BG_ROIS=[
+ {x:.01,y:.01,w:.12,h:.12},{x:.87,y:.01,w:.12,h:.12},
+ {x:.01,y:.87,w:.12,h:.12},{x:.87,y:.87,w:.12,h:.12}
+];
+
+const BPM_LO=45,BPM_HI=180;
+const IBI_MIN=333,IBI_MAX=1333;
+const WARMUP_SEC=5;        // 5 секунд прогрева!
+const MIN_AMP=0.003;       // Минимальная амплитуда нормализованного сигнала
+const Z_THRESH=1.5;        // Строгий z-score порог
+const REFR_MS=400;         // Рефрактерный период 400мс
+
+let on=false,stm=null,raf=null;
+let greenNorm=[],rawT=[];
+let filtSig=[];
+let sBPM=NaN,sHRV=NaN,lastVBPM=NaN,lastVT=0;
+let fc=0,ft0=0,fps=25;
+let pSkinG=NaN;
+let realIBIs=[],beatTs=[];
+let hrtTmr=null;
+
+// IIR — считается ОДИН раз
+let iirHP={x1:0,x2:0,y1:0,y2:0};
+let iirLP={x1:0,x2:0,y1:0,y2:0};
+let cHP=null,cLP=null;
+let iirInit=false;
+let iirWarmup=0; // счётчик прогрева фильтра
+
+// Z-score
+let zMean=0,zVar=0,zN=0;
+let lastPkT=0;
+
+// Амплитуда сигнала (для проверки)
+let sigAmp=0;
+
+// Статистика
+let totalBeats=0,rejectedBeats=0;
+
+const vid=document.getElementById('vid');
+const ov=document.getElementById('ov');
+const co=ov.getContext('2d');
+const bOn=document.getElementById('bOn'),bOff=document.getElementById('bOff');
+const stT=document.getElementById('stT'),dot=document.getElementById('dot');
+const fpL=document.getElementById('fpL'),ampL=document.getElementById('ampL');
+const vB=document.getElementById('vB'),vH=document.getElementById('vH'),vS=document.getElementById('vS');
+const hrt=document.getElementById('hrt'),bi=document.getElementById('bi');
+const cP=document.getElementById('cP'),xP=cP.getContext('2d');
+const cR=document.getElementById('cR'),xR=cR.getContext('2d');
+const hc=document.createElement('canvas');hc.width=W;hc.height=H;
+const hx=hc.getContext('2d',{willReadFrequently:true});
+
+bOn.onclick=startApp;bOff.onclick=stopApp;
+
+async function startApp(){
+ try{
+  stm=await navigator.mediaDevices.getUserMedia({
+   video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false
+  });
+  vid.srcObject=stm;await vid.play();
+  resetAll();on=true;
+  bOn.style.display='none';bOff.style.display='';
+  ft0=performance.now();fc=0;
+  loop();
+ }catch(e){alert('Камера: '+e.message)}
+}
+
+function stopApp(){
+ on=false;if(raf)cancelAnimationFrame(raf);
+ if(stm)stm.getTracks().forEach(t=>t.stop());
+ vid.srcObject=null;bOn.style.display='';bOff.style.display='none';
+ stT.textContent='Стоп';dot.className='dot';
+}
+
+function resetAll(){
+ greenNorm=[];rawT=[];filtSig=[];
+ sBPM=NaN;sHRV=NaN;lastVBPM=NaN;lastVT=0;
+ pSkinG=NaN;realIBIs=[];beatTs=[];
+ zMean=0;zVar=0;zN=0;lastPkT=0;
+ iirInit=false;iirWarmup=0;sigAmp=0;
+ totalBeats=0;rejectedBeats=0;
+ vB.textContent='--';vH.textContent='--';vS.textContent='--';
+ bi.textContent='Ожидание...';
+}
+
+// =========================================================================
+//  IIR BUTTERWORTH — ИНИЦИАЛИЗАЦИЯ ОДИН РАЗ
+// =========================================================================
+function initIIR(fs){
+ if(iirInit)return; // НЕ пересчитываем!
+ const makeHP=(fc,fs)=>{
+  const w0=Math.tan(Math.PI*fc/fs),w2=w0*w0,sq=Math.SQRT2,k=1+sq*w0+w2;
+  return{b0:1/k,b1:-2/k,b2:1/k,a1:2*(w2-1)/k,a2:(1-sq*w0+w2)/k};
+ };
+ const makeLP=(fc,fs)=>{
+  const w0=Math.tan(Math.PI*fc/fs),w2=w0*w0,sq=Math.SQRT2,k=1+sq*w0+w2;
+  return{b0:w2/k,b1:2*w2/k,b2:w2/k,a1:2*(w2-1)/k,a2:(1-sq*w0+w2)/k};
+ };
+ cHP=makeHP(.7,fs);
+ cLP=makeLP(3.0,fs);
+ iirHP={x1:0,x2:0,y1:0,y2:0};
+ iirLP={x1:0,x2:0,y1:0,y2:0};
+ iirInit=true;
+}
+
+function iir(x,st,c){
+ const y=c.b0*x+c.b1*st.x1+c.b2*st.x2-c.a1*st.y1-c.a2*st.y2;
+ st.x2=st.x1;st.x1=x;st.y2=st.y1;st.y1=y;return y;
+}
+
+// =========================================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// =========================================================================
+let startTime=0;
+
+function loop(){
+ if(!on)return;
+ try{
+  const now=performance.now();
+  if(!startTime)startTime=now;
+  const elapsed=(now-startTime)/1000;
+
+  fc++;
+  if(now-ft0>2000){
+   fps=Math.max(8,fc/((now-ft0)/1000));
+   fc=0;ft0=now;
+   fpL.textContent=fps.toFixed(0)+'fps';
+   // Инициализируем IIR один раз, когда FPS стабилизировался
+   if(!iirInit && elapsed>2) initIIR(fps);
+  }
+
+  if(!iirInit){
+   stT.textContent='Стабилизация камеры...';dot.className='dot w';
+   raf=requestAnimationFrame(loop);return;
+  }
+
+  hx.drawImage(vid,0,0,W,H);
+  const px=hx.getImageData(0,0,W,H).data;
+
+  // Фон (углы)
+  let bgG=0,bgN=0;
+  for(const roi of BG_ROIS){
+   const rx=Math.floor(W*roi.x),ry=Math.floor(H*roi.y);
+   const rw=Math.floor(W*roi.w),rh=Math.floor(H*roi.h);
+   let s=0,c=0;
+   for(let y=ry;y<ry+rh;y+=2)for(let x=rx;x<rx+rw;x+=2){
+    s+=px[(y*W+x)*4+1];c++;
+   }
+   if(c>0){bgG+=s/c;bgN++}
+  }
+  bgG=bgN>0?bgG/bgN:128;
+
+  // Кожа лица (зелёный канал)
+  const fx=Math.floor(W*FACE.x),fy=Math.floor(H*FACE.y);
+  const fw=Math.floor(W*FACE.w),fh=Math.floor(H*FACE.h);
+  let skinG=0,skinC=0;
+  for(let y=fy;y<fy+fh;y+=2)for(let x=fx;x<fx+fw;x+=2){
+   const i=(y*W+x)*4;
+   const r=px[i],g=px[i+1],b=px[i+2];
+   if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
+    skinG+=g;skinC++;
+   }
+  }
+  const skinOk=skinC/(Math.floor(fw/2)*Math.floor(fh/2))>.25;
+  const avgSkinG=skinC>0?skinG/skinC:0;
+
+  drawROI(skinOk,skinC,bgN);
+
+  if(!skinOk){
+   stT.textContent='⚠ Лицо не найдено';dot.className='dot';
+   showHeld(now);
+  }else{
+   // Motion
+   if(!isNaN(pSkinG)&&Math.abs(avgSkinG-pSkinG)>4){
+    pSkinG=avgSkinG;stT.textContent='🔄 Движение...';dot.className='dot w';
+    showHeld(now);throw'skip';
+   }
+   pSkinG=avgSkinG;
+
+   // DUAL-ROI: нормализованный зелёный
+   const gn=bgG>10?avgSkinG/bgG:1;
+   greenNorm.push(gn);
+   rawT.push(now);
+   const mx=Math.floor(fps*12);
+   while(greenNorm.length>mx){greenNorm.shift();rawT.shift()}
+
+   // IIR полосовой (инкрементально)
+   const hp=iir(gn,iirHP,cHP);
+   const bp=iir(hp,iirLP,cLP);
+   filtSig.push(bp);
+   if(filtSig.length>mx)filtSig.shift();
+
+   // Прогрев фильтра (первые 3 сек после инициализации)
+   iirWarmup++;
+   if(iirWarmup<fps*3){
+    stT.textContent=`Прогрев фильтра... ${Math.round(iirWarmup/(fps*3)*100)}%`;
+    dot.className='dot w';
+   }
+   // Прогрев детектора (5 сек от старта)
+   else if(elapsed<WARMUP_SEC){
+    // Накапливаем статистику, но не детектируем
+    const a=0.02;
+    zMean=zMean*(1-a)+bp*a;
+    zVar=zVar*(1-a)+(bp-zMean)**2*a;
+    stT.textContent=`Калибровка... ${Math.round(elapsed/WARMUP_SEC*100)}% (замрите!)`;
+    dot.className='dot w';
+   }
+   else{
+    // РЕАЛЬНАЯ ДЕТЕКЦИЯ
+    detectPeak(bp,now);
+    updateBPM(now);
+   }
+  }
+
+  if(fc%2===0){drawPPG(now);drawRaw()}
+
+ }catch(e){if(e!=='skip')console.error(e)}
+ finally{raf=requestAnimationFrame(loop)}
+}
+
+// =========================================================================
+//  ЧЕСТНЫЙ ПИКОВЫЙ ДЕТЕКТОР
+//  Никакой интерполяции! Только реальные пики.
+// =========================================================================
+function detectPeak(val,now){
+ // Обновляем скользящее среднее и дисперсию
+ const a=0.01;
+ zMean=zMean*(1-a)+val*a;
+ zVar=zVar*(1-a)+(val-zMean)**2*a;
+ const zStd=Math.sqrt(Math.max(zVar,1e-10));
+
+ // Амплитуда сигнала (для проверки качества)
+ sigAmp=sigAmp*.99+zStd*.01;
+ ampL.textContent='A:'+sigAmp.toFixed(4);
+
+ // Если амплитуда слишком мала — нет пульсового сигнала
+ if(sigAmp<MIN_AMP){
+  stT.textContent=`⚠ Сигнал слишком слабый (A=${sigAmp.toFixed(4)})`;
+  dot.className='dot w';
+  return;
+ }
+
+ const z=(val-zMean)/zStd;
+
+ // Пик: z > порога И рефрактерный период прошёл
+ if(z>Z_THRESH && (now-lastPkT)>REFR_MS){
+  // Проверка локального максимума (3 точки)
+  const n=filtSig.length;
+  if(n>=4){
+   const v2=filtSig[n-2],v1=filtSig[n-1],v0=val;
+   if(v1>v2 && v1>=v0){
+    // РЕАЛЬНЫЙ УДАР — без интерполяции!
+    const ibi=now-lastPkT;
+    if(ibi>=IBI_MIN && ibi<=IBI_MAX){
+     realIBIs.push(ibi);
+     if(realIBIs.length>50)realIBIs.shift();
+     totalBeats++;
+    }else{
+     rejectedBeats++;
+    }
+    lastPkT=now;
+    beatTs.push(now);
+    while(beatTs.length>0&&now-beatTs[0]>30000)beatTs.shift();
+
+    hrt.classList.add('beat');
+    if(hrtTmr)clearTimeout(hrtTmr);
+    hrtTmr=setTimeout(()=>hrt.classList.remove('beat'),150);
+
+    if(ibi>=IBI_MIN&&ibi<=IBI_MAX){
+     bi.textContent=`💓 ${Math.round(ibi)}мс (${Math.round(60000/ibi)} BPM)`;
+    }
+   }
+  }
+ }
+}
+
+// =========================================================================
+//  BPM — ТОЛЬКО из реальных IBI, без интерполяции
+// =========================================================================
+function updateBPM(now){
+ if(realIBIs.length<4){
+  stT.textContent=`Накопление: ${realIBIs.length}/4 реальных ударов`;
+  dot.className='dot w';return;
+ }
+
+ // Медиана IBI (устойчива к выбросам)
+ const s=[...realIBIs.slice(-15)].sort((a,b)=>a-b);
+ const med=s[Math.floor(s.length/2)];
+ const bpm=60000/med;
+
+ if(bpm<BPM_LO||bpm>BPM_HI){
+  stT.textContent=`⚠ BPM вне диапазона: ${Math.round(bpm)}`;
+  dot.className='dot w';return;
+ }
+
+ if(isNaN(sBPM))sBPM=bpm;
+ else{
+  const j=Math.abs(bpm-sBPM);
+  const a=j>15?.06:j>8?.10:.08;
+  sBPM=sBPM*(1-a)+bpm*a;
+ }
+
+ const dbpm=Math.round(sBPM);
+ lastVBPM=dbpm;lastVT=now;
+ vB.textContent=dbpm;vB.style.opacity='1';
+
+ const b10=beatTs.filter(t=>now-t<10000).length;
+ stT.textContent=`✅ ${dbpm} BPM · ${b10} ударов/10с · R:${rejectedBeats}`;
+ dot.className='dot ok';
+
+ calcHRV(dbpm);
+}
+
+function calcHRV(bpm){
+ if(realIBIs.length<6)return;
+ const s=[...realIBIs.slice(-20)].sort((a,b)=>a-b);
+ const med=s[Math.floor(s.length/2)];
+ // Чистые IBI (±30% от медианы)
+ const clean=realIBIs.filter(i=>i>=med*.7&&i<=med*1.3);
+ if(clean.length<5)return;
+ let ss=0,cn=0;
+ for(let i=1;i<clean.length;i++){const d=clean[i]-clean[i-1];ss+=d*d;cn++}
+ if(!cn)return;
+ const rmssd=Math.sqrt(ss/cn);
+ if(isNaN(sHRV))sHRV=rmssd;else sHRV=sHRV*.85+rmssd*.15;
+ const hrv=Math.round(Math.max(5,Math.min(180,sHRV)));
+ vH.textContent=hrv;
+
+ let sb;
+ if(bpm<=60)sb=5;else if(bpm<=70)sb=15;else if(bpm<=78)sb=25;
+ else if(bpm<=86)sb=38;else if(bpm<=95)sb=52;else if(bpm<=105)sb=68;else sb=85;
+ let sh;
+ if(hrv>=80)sh=5;else if(hrv>=55)sh=18;else if(hrv>=40)sh=32;
+ else if(hrv>=28)sh=48;else if(hrv>=18)sh=65;else sh=88;
+ vS.textContent=Math.round(Math.max(5,Math.min(98,sb*.35+sh*.65)));
+}
+
+function showHeld(now){
+ if(!isNaN(lastVBPM)&&(now-lastVT)<4000){vB.textContent=lastVBPM;vB.style.opacity='.5'}
+ else{vB.textContent='--';vB.style.opacity='1'}
+}
+
+// =========================================================================
+//  РИСОВАНИЕ
+// =========================================================================
+function drawROI(skinOk,skinC,bgN){
+ co.clearRect(0,0,W,H);
+ co.fillStyle='rgba(0,0,0,.3)';co.fillRect(0,0,W,H);
+ const fx=Math.floor(W*FACE.x),fy=Math.floor(H*FACE.y);
+ const fw=Math.floor(W*FACE.w),fh=Math.floor(H*FACE.h);
+ co.clearRect(fx,fy,fw,fh);
+ co.strokeStyle=skinOk?'#22c55e':'#ef4444';co.lineWidth=2;co.strokeRect(fx,fy,fw,fh);
+ co.strokeStyle='rgba(56,189,248,.4)';co.lineWidth=1;co.setLineDash([3,3]);
+ for(const r of BG_ROIS){
+  const bx=Math.floor(W*r.x),by=Math.floor(H*r.y);
+  co.clearRect(bx,by,Math.floor(W*r.w),Math.floor(H*r.h));
+  co.strokeRect(bx,by,Math.floor(W*r.w),Math.floor(H*r.h));
+ }
+ co.setLineDash([]);
+ co.font='bold 10px sans-serif';
+ co.fillStyle=skinOk?'#22c55e':'#ef4444';
+ co.fillText(skinOk?'✓ Лицо':'✗ Нет',fx+3,fy-3);
+}
+
+function drawPPG(now){
+ const w=cP.width=cP.clientWidth*2,h=cP.height=cP.clientHeight*2;
+ xP.clearRect(0,0,w,h);
+ if(filtSig.length<4){xP.fillStyle='#4b5563';xP.font='11px sans-serif';xP.fillText('Фильтрованный сигнал...',10,h/2);return}
+ const show=Math.min(filtSig.length,Math.floor(fps*6));
+ const sl=filtSig.slice(-show);
+ let mn=1e9,mx=-1e9;for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
+ const rng=mx-mn||1;
+
+ // Порог
+ const thr=zMean+Math.sqrt(Math.max(zVar,1e-10))*Z_THRESH;
+ const thrY=h-((thr-mn)/rng)*(h*.7)-h*.15;
+ if(thrY>5&&thrY<h-5){
+  xP.strokeStyle='rgba(239,68,68,.2)';xP.setLineDash([3,3]);
+  xP.beginPath();xP.moveTo(0,thrY);xP.lineTo(w,thrY);xP.stroke();xP.setLineDash([]);
+ }
+
+ xP.beginPath();xP.strokeStyle='#38bdf8';xP.lineWidth=2;
+ for(let i=0;i<sl.length;i++){
+  const px=i/(sl.length-1)*w;
+  const py=h-((sl[i]-mn)/rng)*(h*.7)-h*.15;
+  i===0?xP.moveTo(px,py):xP.lineTo(px,py);
+ }
+ xP.stroke();
+
+ // Удары
+ const tStart=rawT.length>show?rawT[rawT.length-show]:(rawT[0]||0);
+ const tEnd=rawT[rawT.length-1]||now;
+ const tR=tEnd-tStart||1;
+ xP.fillStyle='#ef4444';
+ for(const bt of beatTs){
+  if(bt<tStart||bt>tEnd)continue;
+  const px=((bt-tStart)/tR)*w;
+  xP.globalAlpha=.2;xP.fillRect(px-1,0,2,h);xP.globalAlpha=1;
+  xP.beginPath();xP.arc(px,8,3,0,Math.PI*2);xP.fill();
+ }
+ xP.fillStyle='#555';xP.font='10px monospace';
+ xP.fillText(`BVP (filtered) · z>${Z_THRESH} · R:${rejectedBeats}`,6,h-4);
+}
+
+function drawRaw(){
+ const w=cR.width=cR.clientWidth*2,h=cR.height=cR.clientHeight*2;
+ xR.clearRect(0,0,w,h);
+ if(greenNorm.length<4){xR.fillStyle='#4b5563';xR.font='11px sans-serif';xR.fillText('Сырой сигнал...',10,h/2);return}
+ const show=Math.min(greenNorm.length,Math.floor(fps*6));
+ const sl=greenNorm.slice(-show);
+ let mn=1e9,mx=-1e9;for(const v of sl){if(v<mn)mn=v;if(v>mx)mx=v}
+ const rng=mx-mn||1;
+
+ xR.beginPath();xR.strokeStyle='#4ade80';xR.lineWidth=1.5;
+ for(let i=0;i<sl.length;i++){
+  const px=i/(sl.length-1)*w;
+  const py=h-((sl[i]-mn)/rng)*(h*.7)-h*.15;
+  i===0?xR.moveTo(px,py):xR.lineTo(px,py);
+ }
+ xR.stroke();
+
+ // Линия 1.0 (идеальная нормализация)
+ const oneY=h-((1-mn)/rng)*(h*.7)-h*.15;
+ if(oneY>0&&oneY<h){
+  xR.strokeStyle='rgba(255,255,255,.1)';xR.setLineDash([2,4]);
+  xR.beginPath();xR.moveTo(0,oneY);xR.lineTo(w,oneY);xR.stroke();xR.setLineDash([]);
+ }
+
+ xR.fillStyle='#555';xR.font='10px monospace';
+ xR.fillText(`Raw G/BG (Dual-ROI) · Amp: ${sigAmp.toFixed(4)} · Min: ${MIN_AMP}`,6,h-4);
+}
+</script>
+</body>
+</html>
