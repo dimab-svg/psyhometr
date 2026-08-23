@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Психометр v11</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background:#0a0a0f; color:#e0e0e0;
+            font-family:'Courier New',monospace;
+            min-height:100vh; overflow-x:hidden;
+        }
+        .header {
+            background:#0f0f1a; padding:10px 16px;
+            border-bottom:1px solid #1a1a2e;
+            display:flex; align-items:center; justify-content:space-between;
+        }
+        .header h1 { font-size:14px; color:#00ff88; letter-spacing:2px; }
+        .boot-log {
+            padding:6px 16px; background:#080810;
+            border-bottom:1px solid #1a1a2e;
+            font-size:10px; max-height:70px; overflow-y:auto;
+        }
+        .bl{padding:1px 0;}
+        .bl.ok{color:#00ff88;}.bl.err{color:#ff3333;}
+        .bl.wait{color:#ff9900;}.bl.info{color:#4488ff;}
+
+        .video-wrap {
+            position:relative; width:100%; height:220px;
+            background:#000; overflow:hidden;
+        }
+        #videoEl { width:100%; height:220px; object-fit:cover; display:block; }
+        #videoEl.mirrored { transform:scaleX(-1); }
+        #drawCanvas {
+            position:absolute; top:0; left:0;
+            width:100%; height:220px; pointer-events:none;
+        }
+
+        .controls {
+            padding:8px 16px; display:flex; gap:8px;
+            background:#0f0f1a; border-bottom:1px solid #1a1a2e;
+        }
+        button {
+            padding:9px 10px; border:1px solid #333;
+            border-radius:6px; background:#1a1a2e; color:#e0e0e0;
+            font-family:'Courier New',monospace; font-size:12px;
+            cursor:pointer; flex:1;
+        }
+        button.primary { border-color:#00ff88; color:#00ff88; }
+        button.danger  { border-color:#ff3333; color:#ff3333; }
+        button:disabled { opacity:0.4; }
+
+        .status-banner {
+            padding:9px 16px; font-size:12px; font-weight:bold;
+            text-align:center; border-bottom:2px solid #111;
+            min-height:38px; transition:background 0.3s,color 0.3s;
+        }
+        .sb-idle    {background:#0f0f1a;color:#555;}
+        .sb-loading {background:#0a0a1a;color:#4488ff;}
+        .sb-calib   {background:#1a1400;color:#ff9900;}
+        .sb-noface  {background:#1a0800;color:#ff6600;}
+        .sb-weak    {background:#180808;color:#ff5555;}
+        .sb-confirm {background:#0a1a0a;color:#88ff88;}
+        .sb-valid   {background:#051505;color:#00ff88;font-size:14px;}
+
+        .prog-wrap{height:4px;background:#111;}
+        .prog-fill{height:100%;background:#ff9900;transition:width 0.1s;width:0%;}
+        .prog-fill.ok{background:#00ff88;}
+
+        .diag {
+            display:grid; grid-template-columns:repeat(4,1fr);
+            gap:1px; background:#111; border-bottom:1px solid #1a1a2e;
+        }
+        .dc{background:#0c0c14;padding:8px 6px;text-align:center;}
+        .dn{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:1px;}
+        .dv{font-size:15px;font-weight:bold;margin-top:3px;color:#888;}
+        .dv.g{color:#00ff88;}.dv.y{color:#ff9900;}.dv.r{color:#ff3333;}
+
+        .hr-display {
+            padding:14px 16px 10px; text-align:center;
+            background:#0a0a10; border-bottom:1px solid #1a1a2e;
+        }
+        .hr-num {
+            font-size:72px;font-weight:bold;
+            color:#333;line-height:1;transition:color 0.4s;
+        }
+        .hr-num.valid  {color:#00ff88;}
+        .hr-num.warn   {color:#ff9900;}
+        .hr-num.danger {color:#ff3333;}
+        .hr-bpm{font-size:13px;color:#444;margin-top:3px;}
+        .hr-sub{font-size:11px;color:#555;margin-top:4px;min-height:15px;}
+
+        .charts{padding:10px 16px;}
+        .cb{margin-bottom:12px;}
+        .ch{
+            font-size:10px;color:#555;text-transform:uppercase;
+            letter-spacing:1px;margin-bottom:4px;
+            display:flex;justify-content:space-between;
+        }
+        .ch span{color:#888;}
+        canvas.cv{
+            width:100%;height:65px;display:block;
+            background:#0c0c14;border:1px solid #1a1a2e;border-radius:4px;
+        }
+        canvas.cv-m{height:85px;}
+
+        .hrv{
+            display:grid;grid-template-columns:repeat(3,1fr);
+            gap:1px;background:#111;
+            border-top:1px solid #1a1a2e;border-bottom:1px solid #1a1a2e;
+        }
+        .hc{background:#0c0c14;padding:9px 8px;text-align:center;}
+        .hn{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:1px;}
+        .hv{font-size:20px;font-weight:bold;color:#00ff88;margin-top:3px;}
+        .hv.w{color:#ff9900;}.hv.b{color:#ff3333;}
+        .hu{font-size:9px;color:#444;}
+
+        .log-wrap{padding:10px 16px 8px;}
+        .lt{font-size:10px;color:#555;text-transform:uppercase;margin-bottom:5px;}
+        .lb{
+            background:#0c0c14;border:1px solid #1a1a2e;
+            border-radius:6px;padding:6px 8px;
+            max-height:100px;overflow-y:auto;font-size:11px;
+        }
+        .lr{padding:2px 0;border-bottom:1px solid #111;display:flex;gap:8px;}
+        .lr:last-child{border:none;}
+        .lrt{color:#444;min-width:42px;}
+        .lrm{color:#888;}
+        .lrm.ok{color:#00ff88;}.lrm.warn{color:#ff9900;}
+        .lrm.err{color:#ff3333;}.lrm.info{color:#4488ff;}
+
+        .footer{
+            padding:8px 16px 20px;font-size:9px;color:#444;
+            text-align:center;line-height:1.6;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>⚡ ПСИХОМЕТР v11</h1>
+    <span id="fpsLbl" style="font-size:11px;color:#444">--</span>
+</div>
+
+<div class="boot-log" id="bootLog"></div>
+
+<div class="video-wrap">
+    <video id="videoEl" autoplay playsinline muted></video>
+    <canvas id="drawCanvas"></canvas>
+</div>
+
+<div class="controls">
+    <button class="primary" id="btnStart" onclick="startAll()" disabled>▶ Старт</button>
+    <button id="btnFlip" onclick="flipCamera()" disabled>⟳ Камера</button>
+    <button class="danger" id="btnStop" onclick="stopAll()" disabled>■ Стоп</button>
+</div>
+
+<div class="status-banner sb-loading" id="statusBanner">загрузка...</div>
+<div class="prog-wrap"><div class="prog-fill" id="progFill"></div></div>
+
+<div class="diag">
+    <div class="dc"><div class="dn">Лицо</div><div class="dv" id="dFace">--</div></div>
+    <div class="dc"><div class="dn">Амплитуда</div><div class="dv" id="dAmp">--</div></div>
+    <div class="dc"><div class="dn">Регуляр.</div><div class="dv" id="dReg">--</div></div>
+    <div class="dc"><div class="dn">Пиков</div><div class="dv" id="dPeaks">--</div></div>
+</div>
+
+<div class="hr-display">
+    <div class="hr-num" id="hrNum">--</div>
+    <div class="hr-bpm">ударов в минуту</div>
+    <div class="hr-sub" id="hrSub">ожидание...</div>
+</div>
+
+<div class="charts">
+    <div class="cb">
+        <div class="ch">CHROM сигнал<span id="lSig">--</span></div>
+        <canvas class="cv" id="cvSig"></canvas>
+    </div>
+    <div class="cb">
+        <div class="ch">Фильтр + пики<span id="lFilt">--</span></div>
+        <canvas class="cv" id="cvFilt"></canvas>
+    </div>
+    <div class="cb">
+        <div class="ch">Пульс<span id="lHR">--</span></div>
+        <canvas class="cv" id="cvHR"></canvas>
+    </div>
+</div>
+
+<div class="hrv">
+    <div class="hc"><div class="hn">RMSSD</div><div class="hv" id="hvR">--</div><div class="hu">мс</div></div>
+    <div class="hc"><div class="hn">Стресс</div><div class="hv" id="hvS">--</div><div class="hu">индекс</div></div>
+    <div class="hc"><div class="hn">R-R ср.</div><div class="hv" id="hvRR">--</div><div class="hu">мс</div></div>
+</div>
+
+<div class="charts">
+    <div class="cb">
+        <div class="ch">R-R интервалы<span id="lRR">--</span></div>
+        <canvas class="cv cv-m" id="cvRR"></canvas>
+    </div>
+</div>
+
+<div class="log-wrap">
+    <div class="lt">Лог</div>
+    <div class="lb" id="logBox"></div>
+</div>
+
+<div class="footer">
+    Экспериментальный демонстратор rPPG. Не является медицинским прибором.<br>
+    Пульс — оценка ±3–7 уд/мин при хорошем свете. RMSSD/стресс — ориентировочно.
+</div>
+
+<script>
+// ================================================================
+//  ПСИХОМЕТР v11
+//
+//  Исправления относительно v9:
+//  1. РАБОТА НА НИЗКОМ FPS (главное): порог снижен до 7 Гц — фронтальная
+//     камера смартфона в помещении даёт 8–15 Гц, и этого ДОСТАТОЧНО
+//     для пульса до ~150 уд/мин. Полоса оценки шума и допуски
+//     проверок адаптируются к низкой частоте
+//  2. УСКОРЕНИЕ КОНВЕЙЕРА НА ТЕЛЕФОНАХ (вторая причина «9 Гц» —
+//     это часто скорость WASM-обработки, а не камеры!):
+//     - кадр обрабатывается в 256px вместо 640px (MediaPipe внутри
+//       всё равно сжимает до 192px — качество лендмарков не страдает)
+//     - графики перерисовываются 4 раза/с, а не каждый кадр
+//     - убран дорогой shadowBlur, точки рисуются fillRect
+//  3. ЗОНЫ КРУПНЕЕ: лоб — выше (0.72×E2M над бровями, 1.05×D шириной),
+//     щёки — квадраты от подглазничной области до рта, смещены вниз
+//  4. Индикатор «FPS:rAF | поток:XX» — видно реальную частоту сэмплов
+//
+//  v11 — СТАБИЛЬНОСТЬ (как в серьёзных rPPG-проектах):
+//  5. ПУЛЬС ПО СПЕКТРУ (периодограмма с окном Ханна) на буфере 20с —
+//     не ломается от пропущенных/лишних пиков; пики — только для R-R
+//  6. PLL-ТРЕКЕР РИТМА: предсказывает следующий удар; пик вне слота
+//     отбрасывается, пропущенный удар подставляется по фазе;
+//     период подстраивается плавно (как в beat-tracker'ах)
+//  7. SQI/SNR-гейт: окно принимается только если спектральный пик
+//     доминирует (SNR ≥ 4) — мерцание и шум не проходят
+//  8. МАСКИРОВАНИЕ ДВИЖЕНИЯ: сдвиг якорей лица за кадр; если много
+//     подвижных сэмплов — окно бракуется («движение»), а не портит HR
+//  9. ГИСТЕРЕЗИС ОТОБРАЖЕНИЯ: при потере сигнала последний пульс
+//     держится 10с (жёлтым), а не мигает '--'
+// 10. ГЛАЗА И НОС — отдельные рамки на экране (в замере НЕ участвуют,
+//     только контроль корректности геометрии), зоны отстроены от них
+// ================================================================
+
+const A={ // якоря MediaPipe
+    eyeR_out:33, eyeR_in:133, eyeL_in:362, eyeL_out:263,
+    browR:105, browL:334,
+    mouthR:61, mouthL:291,
+    noseTip:1, chin:152, top:10, contourR:234, contourL:454,
+};
+
+const CFG={
+    BUF_SEC:    20,      // длинный буфер — точнее спектр
+    CALIB_SEC:  5,
+    BP_LO:      0.7,
+    BP_HI:      3.0,
+    NOISE_K:    1.5,
+    MIN_AMP:    0.0025,
+    AMP_MAX:    0.03,
+    PEAK_MIN_SEC: 0.33,
+    MIN_PEAKS:  4,
+    MAX_CV:     0.40,
+    FAIL_TOLERANCE: 3,
+    VALID_NEED: 3,
+    RR_MIN:     350,
+    RR_MAX:     1500,
+    RR_OUT:     0.25,
+    HR_WIN:     10,
+    SNR_MIN:    4.0,     // спектральный пик/медиана — ниже окно бракуется
+    MOVE_MAX:   0.35,    // сдвиг якорей > 0.35×D за кадр = движение
+    MOVE_FRAC:  0.30,    // >30% подвижных сэмплов → окно бракуется
+    LOST_HOLD:  10000,   // держать последний пульс (жёлтым) 10с
+    TRIGGER_CD: 20000,
+    ANALYZE_MS: 600,
+    WATCHDOG_MS:3000,
+    REFACE_MS:  1500,   // потеря лица дольше этого → перезапуск измерения
+    FACE_MIN:   0.20,   // лицо < 20% ширины кадра — придвинуть
+    HINT_MS:    800,    // подсказка показывается только если причина стабильна
+    FS_MIN:     7,      // минимум частоты сэмплов (фронталка телефона: 8-15 Гц)
+    REDRAW_MS:  250,    // перерисовка графиков не чаще 4 раз/с
+    PROC_W:     256,    // ширина обрабатываемого кадра (ускорение на телефонах)
+};
+
+// Пропорции зон (выведены по canonical_face_model.obj):
+// лоб: 1.05×D шириной, от бровей вверх на 0.72×E2M (до линии волос)
+// щека: КВАДРАТ 0.62×D шириной, от подглазничья (глаза+0.30×E2M)
+//       до чуть ниже рта; по горизонтали — 35% пути от уголка глаза
+//       к контуру лица
+const ZONE={
+    FOREHEAD_W: 0.92, FOREHEAD_UP: 0.85, FOREHEAD_DOWN: 0.06,
+    FOREHEAD_MIN_H: 0.26,          // меньше — лоб✗ (камера слишком близко)
+    CHEEK_W: 0.52, CHEEK_TOP: 0.28, CHEEK_BOTTOM: 0.05, CHEEK_LAT: 0.38,
+};
+// кольца глаз и контур носа — ТОЛЬКО для отображения и контроля
+const EYE_R=[33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7];
+const EYE_L=[362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382];
+const NOSE =[168,6,197,195,5,4,1,19,94,2,98,327,49,279,125,355];
+
+const S={
+    faceMesh:null, stream:null, facing:'user', mirror:true,
+    running:false, mpReady:false,
+
+    sigR:[],sigG:[],sigB:[],times:[],
+    chromSig:[],filtered:[],peaks:[],rr:[],rrClean:[],
+
+    fps:0, fpsCount:0, fpsTimer:0,
+    amplitude:0, ampThr:CFG.MIN_AMP, noise:0, rrCV:0,
+    hr:0, hrBuf:[], hrHistory:[], rmssd:0, stress:0,
+
+    isValid:false, validStreak:0, failStreak:0,
+    faceOk:false, faceFrames:0, noFaceFrames:0,
+    foreheadOk:true, faceHint:'', hintSince:0,
+    noFaceSince:0,                      // когда лицо пропало (или 0)
+    calibDone:false, calibStart:0,
+    frameN:0, lastFrameTime:0, lastAnalyze:0,
+
+    busy:false, lastSentTime:-1, lastSendAt:0, lastResAt:0,
+    wdFails:0, recovering:false,
+
+    procW:256, procH:192,        // размер обрабатываемого кадра
+    lastRedraw:0, streamHz:0, lastPushT:0,
+    motion:[], prevAnch:null,    // сдвиг лица за кадр (маскирование движения)
+    trk:null,                    // PLL-трекер ритма
+    lostSince:0,                 // когда потеряли валидный сигнал
+
+    hc:null, hctx:null,
+    lastTriggers:{},
+};
+
+function bLog(msg,cls='info'){
+    const b=document.getElementById('bootLog');
+    const d=document.createElement('div');
+    d.className='bl '+cls;
+    d.textContent=new Date().toTimeString().slice(0,8)+' '+msg;
+    b.appendChild(d);b.scrollTop=b.scrollHeight;
+}
+
+// ================================================================
+//  ЗАГРУЗКА MEDIAPIPE
+// ================================================================
+bLog('Загрузка...','wait');
+
+(function loadMP(){
+    const s1=document.createElement('script');
+    s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js';
+    s1.crossOrigin='anonymous';
+    s1.onload=()=>{ bLog('✓ face_mesh.js','ok'); initMP(); };
+    s1.onerror=()=>{ bLog('✗ Не загружен — проверьте интернет','err'); readyNoMP(); };
+    document.head.appendChild(s1);
+})();
+
+function createMesh(){
+    S.faceMesh=new FaceMesh({
+        locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
+    });
+    S.faceMesh.setOptions({
+        maxNumFaces:1, refineLandmarks:false,
+        minDetectionConfidence:0.4, minTrackingConfidence:0.4,
+    });
+    S.faceMesh.onResults(onFaceResults);
+}
+
+async function initMP(){
+    if(typeof FaceMesh==='undefined'){
+        bLog('✗ FaceMesh не определён','err');
+        readyNoMP(); return;
+    }
+    bLog('Инициализация FaceMesh...','wait');
+    try{
+        createMesh();
+        bLog('Загрузка WASM модели...','wait');
+        await Promise.race([
+            S.faceMesh.initialize(),
+            new Promise((_,r)=>setTimeout(()=>r(new Error('таймаут 30с')),30000))
+        ]);
+        bLog('✓ MediaPipe готов','ok');
+        S.mpReady=true;
+        setBanner('sb-idle','Готово — нажмите Старт');
+        document.getElementById('btnStart').disabled=false;
+    }catch(e){
+        bLog('✗ '+e.message,'err');
+        readyNoMP();
+    }
+}
+
+function readyNoMP(){
+    bLog('→ Базовый режим (без FaceMesh)','wait');
+    S.mpReady=false;
+    setBanner('sb-idle','Базовый режим — нажмите Старт');
+    document.getElementById('btnStart').disabled=false;
+}
+
+async function recoverFaceMesh(){
+    if(S.recovering||typeof FaceMesh==='undefined') return;
+    S.recovering=true;
+    setBanner('sb-loading','восстановление FaceMesh...');
+    log('warn','Перезапуск FaceMesh');
+    try{
+        try{ S.faceMesh.reset(); }catch(_){}
+        await Promise.race([
+            S.faceMesh.initialize(),
+            new Promise((_,r)=>setTimeout(()=>r(new Error('таймаут 20с')),20000))
+        ]);
+        log('ok','FaceMesh восстановлен');
+        bLog('✓ FaceMesh восстановлен','ok');
+    }catch(e){
+        log('err','Восстановление не удалось: '+(e.message||e));
+        bLog('✗ Восстановление не удалось — базовый режим','err');
+        S.mpReady=false;
+    }
+    S.recovering=false;
+    S.busy=false; S.wdFails=0;
+    S.lastResAt=performance.now();
+    S.lastSentTime=-1;
+}
+
+// ================================================================
+//  КАМЕРА
+// ================================================================
+async function startAll(){
+    document.getElementById('btnStart').disabled=true;
+    try{
+        if(S.stream) S.stream.getTracks().forEach(t=>t.stop());
+
+        S.stream=await navigator.mediaDevices.getUserMedia({
+            video:{
+                facingMode:S.facing,
+                width:{ideal:640},height:{ideal:480},
+                frameRate:{ideal:30,min:15},
+            }
+        });
+
+        const v=document.getElementById('videoEl');
+        v.srcObject=S.stream;
+        await new Promise(r=>{v.onloadedmetadata=r;});
+        await v.play();
+
+        S.mirror=(S.facing==='user');
+        v.classList.toggle('mirrored',S.mirror);
+
+        const t=S.stream.getVideoTracks()[0].getSettings();
+        bLog(`✓ ${t.width}x${t.height}@${Math.round(t.frameRate||30)}fps`,'ok');
+
+        document.getElementById('btnFlip').disabled=false;
+        document.getElementById('btnStop').disabled=false;
+
+        // Обрабатываем кадр в уменьшенном виде: MediaPipe всё равно
+        // сжимает до 192px, а загрузка 640px каждый кадр тормозит телефоны
+        const rvw=t.width||640, rvh=t.height||480;
+        S.procW=CFG.PROC_W;
+        S.procH=Math.max(64,Math.round(CFG.PROC_W*rvh/rvw));
+        S.hc=document.createElement('canvas');
+        S.hc.width=S.procW;S.hc.height=S.procH;
+        S.hctx=S.hc.getContext('2d',{willReadFrequently:true});
+        bLog(`обработка ${S.procW}x${S.procH} (ускорение)`,'info');
+
+        resetState();
+        S.running=true;
+        S.calibStart=performance.now();
+        setBanner('sb-calib','калибровка — смотрите в камеру');
+
+        mainLoop();
+        bLog('✓ Цикл запущен','ok');
+
+    }catch(e){
+        bLog('✗ Камера: '+e.message,'err');
+        setBanner('sb-noface','Ошибка: '+e.message);
+        document.getElementById('btnStart').disabled=false;
+    }
+}
+
+function flipCamera(){
+    S.facing=S.facing==='user'?'environment':'user';
+    stopAll(false);
+    setTimeout(startAll,300);
+}
+
+function stopAll(resetUI=true){
+    S.running=false;
+    if(loopId!==null){cancelAnimationFrame(loopId);loopId=null;}
+    if(S.stream){S.stream.getTracks().forEach(t=>t.stop());S.stream=null;}
+    if(resetUI){
+        document.getElementById('btnStart').disabled=false;
+        document.getElementById('btnFlip').disabled=true;
+        document.getElementById('btnStop').disabled=true;
+        setBanner('sb-idle','остановлено');
+        log('info','Остановлено');
+    }
+}
+
+function resetState(){
+    Object.assign(S,{
+        sigR:[],sigG:[],sigB:[],times:[],
+        chromSig:[],filtered:[],peaks:[],rr:[],rrClean:[],
+        fps:0,fpsCount:0,fpsTimer:performance.now(),
+        amplitude:0,ampThr:CFG.MIN_AMP,noise:0,rrCV:0,
+        hr:0,hrBuf:[],hrHistory:[],rmssd:0,stress:0,
+        isValid:false,validStreak:0,failStreak:0,
+        faceOk:false,faceFrames:0,noFaceFrames:0,
+        foreheadOk:true,faceHint:'',hintSince:0,
+        noFaceSince:0,
+        calibDone:false,
+        frameN:0,lastFrameTime:performance.now(),
+        lastAnalyze:0,
+        busy:false,lastSentTime:-1,lastSendAt:0,
+        lastResAt:0,wdFails:0,recovering:false,
+        lastRedraw:0,streamHz:0,lastPushT:0,
+        motion:[],prevAnch:null,trk:null,lostSince:0,
+    });
+    document.getElementById('progFill').style.width='0%';
+    document.getElementById('progFill').className='prog-fill';
+    document.getElementById('hrNum').textContent='--';
+    document.getElementById('hrNum').className='hr-num';
+    document.getElementById('hrSub').textContent='ожидание...';
+    ['dFace','dAmp','dReg','dPeaks'].forEach(id=>{
+        document.getElementById(id).textContent='--';
+        document.getElementById(id).className='dv';
+    });
+}
+
+// Полный перезапуск ИЗМЕРЕНИЯ (лицо пропало надолго / вернулось)
+function restartMeasurement(reason){
+    S.sigR=[];S.sigG=[];S.sigB=[];S.times=[];
+    S.chromSig=[];S.filtered=[];S.peaks=[];S.rr=[];S.rrClean=[];
+    S.isValid=false;S.validStreak=0;S.failStreak=0;
+    S.hr=0;S.hrBuf=[];S.rmssd=0;S.stress=0;
+    S.calibDone=false;
+    S.calibStart=performance.now();
+    S.lastAnalyze=0;
+    S.motion=[];S.prevAnch=null;S.trk=null;S.lostSince=0;
+    document.getElementById('progFill').style.width='0%';
+    document.getElementById('progFill').className='prog-fill';
+    document.getElementById('hrNum').textContent='--';
+    document.getElementById('hrNum').className='hr-num';
+    document.getElementById('hrSub').textContent='ожидание...';
+    if(reason) log('warn',reason);
+}
+
+// ================================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// ================================================================
+let loopId=null;
+
+function mainLoop(){
+    if(!S.running) return;
+    loopId=requestAnimationFrame(mainLoop);
+    const ts=performance.now();
+
+    S.fpsCount++;
+    if(ts-S.fpsTimer>=1000){
+        S.fps=S.fpsCount;S.fpsCount=0;S.fpsTimer=ts;
+        document.getElementById('fpsLbl').textContent=
+            `FPS:${S.fps} | поток:${S.streamHz?S.streamHz.toFixed(1):'--'}`;
+    }
+
+    updateCalib(ts);
+
+    const video=document.getElementById('videoEl');
+    if(video.readyState<2) return;
+    S.lastFrameTime=ts;
+
+    const frameT=video.currentTime;
+    // SANITY: currentTime бывает NaN/0 на некоторых браузерах —
+    // такой кадр целиком пропускаем (источник NaN-амплитуды в v8)
+    const okFrame=Number.isFinite(frameT)&&frameT>0;
+    const newFrame=okFrame&&(frameT!==S.lastSentTime);
+
+    if(S.mpReady&&S.faceMesh&&!S.recovering){
+        if(newFrame&&!S.busy){
+            S.busy=true;
+            S.lastSendAt=ts;
+            S.lastSentTime=frameT;
+            // уменьшенная копия кадра — её и отправляем в FaceMesh,
+            // и из неё же читаем пиксели зон (быстрее в разы)
+            try{S.hctx.drawImage(video,0,0,S.procW,S.procH);}catch(_){}
+            Promise.resolve(S.faceMesh.send({image:S.hc}))
+                .catch(e=>{log('err','send: '+(e&&e.message||e));})
+                .finally(()=>{S.busy=false;});
+        }else if(S.busy&&ts-S.lastSendAt>CFG.WATCHDOG_MS){
+            S.busy=false;
+            S.wdFails++;
+            log('err',`Watchdog: FaceMesh не отвечает (${S.wdFails}/3)`);
+            if(S.wdFails>=3){S.wdFails=0;recoverFaceMesh();}
+        }else if(!S.busy&&S.lastResAt&&ts-S.lastResAt>CFG.WATCHDOG_MS*2){
+            S.lastResAt=ts;
+            recoverFaceMesh();
+        }
+    }else if(newFrame&&S.recovering===false){
+        processBasicFrame(video,ts,frameT);
+    }
+}
+
+// ================================================================
+//  CALLBACK MEDIAPIPE
+// ================================================================
+function onFaceResults(results){
+    if(!S.running) return;
+    S.lastResAt=performance.now();
+    try{ handleFaceResults(results); }
+    catch(e){ log('err','кадр: '+(e&&e.message||e)); }
+}
+
+function handleFaceResults(results){
+    const ts=performance.now();
+    const canvas=document.getElementById('drawCanvas');
+    const ctx=canvas.getContext('2d');
+    const W=canvas.offsetWidth||360,H=canvas.offsetHeight||220;
+    canvas.width=W;canvas.height=H;
+    ctx.clearRect(0,0,W,H);
+
+    const video=document.getElementById('videoEl');
+    const vw=S.procW,vh=S.procH;   // уменьшенное пространство обработки
+
+    if(!results.multiFaceLandmarks?.length){
+        S.faceOk=false;
+        S.noFaceFrames++;
+        S.faceFrames=0;
+        setD('dFace','✗','r');
+
+        // запоминаем момент пропажи лица
+        if(!S.noFaceSince) S.noFaceSince=ts;
+
+        // потеря лица дольше REFACE_MS → перезапуск измерения:
+        // при возврате лица калибровка начнётся заново
+        if(ts-S.noFaceSince>CFG.REFACE_MS&&(S.calibDone||S.sigR.length)){
+            restartMeasurement('Лицо потеряно — перезапуск измерения');
+        }
+
+        ctx.fillStyle='rgba(255,80,0,0.06)';ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#ff6600';ctx.font='bold 13px Courier New';
+        ctx.textAlign='center';
+        ctx.fillText('Лицо не найдено',W/2,H/2-8);
+        ctx.font='11px Courier New';ctx.fillStyle='#ff4400';
+        ctx.fillText('смотрите прямо в камеру',W/2,H/2+10);
+        ctx.textAlign='left';
+
+        if(!S.isValid) setBanner('sb-noface','лицо не найдено');
+        return;
+    }
+
+    // ── лицо найдено ─────────────────────────────────────────
+    if(S.noFaceSince){
+        // лицо вернулось после пропажи — если пропадало надолго,
+        // измерение уже перезапущено выше; просто сбрасываем таймер
+        S.noFaceSince=0;
+    }
+    S.faceOk=true;
+    S.faceFrames++;
+    S.noFaceFrames=0;
+    setD('dFace','✓','g');
+
+    const lm=results.multiFaceLandmarks[0];
+    const P=id=>lm[id]||lm[0];
+    const px=id=>Math.min(Math.max(P(id).x,0),1)*vw;   // кламп в кадр!
+    const py=id=>Math.min(Math.max(P(id).y,0),1)*vh;
+
+    // метрика движения: средний сдвиг якорей за кадр, в долях D
+    const anchIds=[33,133,263,362,1,61,291,152,10];
+    const anch=anchIds.map(id=>px(id)+py(id));
+    let move=0;
+    if(S.prevAnch&&S.prevAnch.length===anch.length){
+        let m=0;
+        for(let i=0;i<anch.length;i++)m+=Math.abs(anch[i]-S.prevAnch[i]);
+        move=m/anch.length;      // в пикселях proc-пространства
+    }
+    S.prevAnch=anch;
+
+    // ── якорная геометрия ────────────────────────────────────
+    const eyeY=(py(A.eyeR_out)+py(A.eyeR_in)+py(A.eyeL_in)+py(A.eyeL_out))/4;
+    const mouthY=(py(A.mouthR)+py(A.mouthL))/2;
+    const e2m=Math.max(1,mouthY-eyeY);                 // глаза→рот
+    const D=Math.max(2,Math.abs(px(A.eyeL_out)-px(A.eyeR_out)));
+    const faceCx=(px(A.eyeR_out)+px(A.eyeL_out))/2;
+    const browY=(py(A.browR)+py(A.browL))/2;
+
+    // ── рамка лица (для подсказок) — с правильной инициализацией ──
+    const fb=faceBox(lm,vw,vh);
+    let hint='';
+    const clipped=fb.w>=vw*0.97||fb.h>=vh*0.97;        // только если реально упирается
+    const tooSmall=fb.w<vw*CFG.FACE_MIN;
+    if(clipped)      hint='лицо не целиком в кадре — отодвиньте камеру';
+    else if(tooSmall)hint='лицо слишком мелкое — придвиньте камеру';
+    // показываем подсказку только если причина держится HINT_MS
+    if(hint){
+        if(S.faceHint===hint) { if(ts-S.hintSince>CFG.HINT_MS) S.faceHint=hint; }
+        else { S.faceHint=hint; S.hintSince=ts; hint=''; }
+    }else{ S.faceHint=''; S.hintSince=0; }
+    if(!S.isValid&&S.faceHint){
+        ctx.fillStyle='#ffcc00';ctx.font='bold 11px Courier New';
+        ctx.textAlign='center';
+        ctx.fillText(S.faceHint,W/2,14);
+        ctx.textAlign='left';
+    }
+
+    // ── зоны по якорям ───────────────────────────────────────
+    // рамки глаз и носа — только отображение и контроль (искл. из замера)
+    const bEyeR=ringBox(lm,EYE_R,vw,vh,0.15);
+    const bEyeL=ringBox(lm,EYE_L,vw,vh,0.15);
+    const bNose=ringBox(lm,NOSE ,vw,vh,0.10);
+    // Лоб: полоса от бровей вверх до линии волос, шириной 1.05×D
+    const fB0=browY-ZONE.FOREHEAD_DOWN*e2m;            // низ (чуть выше бровей)
+    let fT0=fB0-ZONE.FOREHEAD_UP*e2m;                  // верх (линия волос)
+    if(fT0<1) fT0=1;                                   // кламп в кадр
+    const fL=Math.max(1,faceCx-ZONE.FOREHEAD_W*D/2);
+    const fR=Math.min(vw-2,faceCx+ZONE.FOREHEAD_W*D/2);
+    if(fB0>bEyeR.y-3) fB0=bEyeR.y-3;   // лоб строго выше глаз
+    const bF={x:fL,y:fT0,w:Math.max(1,fR-fL),h:Math.max(1,fB0-fT0)};
+    S.foreheadOk=(bF.h>=ZONE.FOREHEAD_MIN_H*e2m)&&(fB0<=vh-2);
+
+    // Щёки: вертикальные зоны от подглазничья до рта, НЕ шире глаз и
+    // гарантированно НИЖЕ рамок глаз и ЛАТЕРАЛЬНЕЕ носа
+    const mkCheek=(eyeId,contId)=>{
+        const ex=px(eyeId),ctx2=px(contId);
+        const cxx=ex+ZONE.CHEEK_LAT*(ctx2-ex);
+        const y0=Math.max(1,Math.floor(Math.max(eyeY+ZONE.CHEEK_TOP*e2m,
+                        bEyeR.y+bEyeR.h+3)));             // ниже рамки глаза
+        const y1=Math.min(vh-2,Math.floor(mouthY+ZONE.CHEEK_BOTTOM*e2m));
+        const w=ZONE.CHEEK_W*D;
+        let x=Math.floor(cxx-w/2);
+        // не залезать на нос
+        if(cxx>faceCx){ if(x<bNose.x+bNose.w+3) x=bNose.x+bNose.w+3; }
+        else         { if(x+w>bNose.x-3) x=Math.max(1,bNose.x-3-w); }
+        return{
+            x:Math.max(1,x),y:y0,
+            w:Math.floor(w),h:Math.floor(Math.max(2,y1-y0)),
+        };
+    };
+    let bL=mkCheek(A.eyeR_out,A.contourR);
+    let bR=mkCheek(A.eyeL_out,A.contourL);
+    bL.w=Math.max(1,Math.min(bL.w,vw-2-bL.x));bR.w=Math.max(1,Math.min(bR.w,vw-2-bR.x));
+    bL.h=Math.max(1,Math.min(bL.h,vh-2-bL.y));bR.h=Math.max(1,Math.min(bR.h,vh-2-bR.y));
+
+    // ── сэмпл из уменьшенного кадра (нарисован в mainLoop) ──
+    const rL=avgRGB(S.hctx,bL);
+    const rR=avgRGB(S.hctx,bR);
+    let r,g,b;
+    if(S.foreheadOk){
+        const rF=avgRGB(S.hctx,bF);
+        r=(rF.r*2+rL.r+rR.r)/4; g=(rF.g*2+rL.g+rR.g)/4; b=(rF.b*2+rL.b+rR.b)/4;
+    }else{
+        r=(rL.r+rR.r)/2; g=(rL.g+rR.g)/2; b=(rL.b+rR.b)/2;
+    }
+
+    // ── сэмпл (только конечные значения!) ───────────────────
+    const sampleT=S.lastSentTime*1000;
+    if(Number.isFinite(r)&&Number.isFinite(g)&&Number.isFinite(b)
+       &&Number.isFinite(sampleT)&&sampleT>0){
+        S.sigR.push(r);S.sigG.push(g);S.sigB.push(b);
+        S.times.push(Math.round(sampleT));
+        S.motion.push(Number.isFinite(move)?move:0);
+        // частота потока (EMA) для индикатора
+        if(S.lastPushT>0&&sampleT>S.lastPushT){
+            const inst=1000/(sampleT-S.lastPushT);
+            S.streamHz=S.streamHz?S.streamHz*0.9+inst*0.1:inst;
+        }
+        S.lastPushT=sampleT;
+        while(S.times.length>2&&S.times[S.times.length-1]-S.times[0]>CFG.BUF_SEC*1000+500){
+            S.sigR.shift();S.sigG.shift();S.sigB.shift();S.times.shift();
+            S.motion.shift();
+        }
+    }
+
+    drawZones(ctx,lm,vw,vh,W,H,bF,bL,bR,bEyeR,bEyeL,bNose,
+        {eyeY,mouthY,e2m,D,faceCx,browY});
+
+    S.frameN++;
+
+    if(S.calibDone&&ts-S.lastAnalyze>CFG.ANALYZE_MS&&S.faceOk){
+        S.lastAnalyze=ts;
+        analyze();
+    }
+
+    if(ts-S.lastRedraw>CFG.REDRAW_MS){
+        S.lastRedraw=ts;
+        redrawCharts();
+    }
+}
+
+// ================================================================
+//  БАЗОВЫЙ РЕЖИМ
+// ================================================================
+function processBasicFrame(video,ts,frameT){
+    const vw=S.procW,vh=S.procH;
+    try{S.hctx.drawImage(video,0,0,vw,vh);}catch(_){}
+
+    const roi={x:Math.floor(vw*0.25),y:Math.floor(vh*0.05),
+               w:Math.floor(vw*0.50),h:Math.floor(vh*0.30)};
+    const s=avgRGB(S.hctx,roi);
+    const sampleT=frameT*1000;
+    if(Number.isFinite(s.r)&&Number.isFinite(sampleT)&&sampleT>0){
+        S.sigR.push(s.r);S.sigG.push(s.g);S.sigB.push(s.b);
+        S.times.push(Math.round(sampleT));
+        while(S.times.length>2&&S.times[S.times.length-1]-S.times[0]>CFG.BUF_SEC*1000+500){
+            S.sigR.shift();S.sigG.shift();S.sigB.shift();S.times.shift();
+        }
+    }
+
+    setD('dFace','ROI','y');
+    S.faceOk=true;
+    S.frameN++;
+
+    const ov=document.getElementById('drawCanvas');
+    const octx=ov.getContext('2d');
+    const W=ov.offsetWidth||360,H=ov.offsetHeight||220;
+    ov.width=W;ov.height=H;octx.clearRect(0,0,W,H);
+    const sx=W/vw,sy=H/vh;
+    let dx=roi.x*sx,dw=roi.w*sx,dy=roi.y*sy,dh=roi.h*sy;
+    if(S.mirror)dx=W-dx-dw;
+    const col=S.isValid?'#00ff88':'#ff9900';
+    octx.strokeStyle=col;octx.lineWidth=2;
+    octx.shadowColor=col;octx.shadowBlur=8;
+    octx.strokeRect(dx,dy,dw,dh);
+    octx.shadowBlur=0;
+    octx.fillStyle=col;octx.font='bold 10px Courier New';
+    octx.textAlign='center';
+    octx.fillText('ЗОНА',dx+dw/2,dy-3);
+    octx.textAlign='left';
+
+    if(S.calibDone&&ts-S.lastAnalyze>CFG.ANALYZE_MS){
+        S.lastAnalyze=ts;
+        analyze();
+    }
+    redrawCharts();
+}
+
+// ================================================================
+//  КАЛИБРОВКА
+// ================================================================
+function updateCalib(ts){
+    const elapsed=(ts-S.calibStart)/1000;
+    const p=Math.min(elapsed/CFG.CALIB_SEC,1);
+    const pct=Math.round(p*100);
+
+    document.getElementById('progFill').style.width=pct+'%';
+
+    if(!S.calibDone){
+        if(p>=1){
+            S.calibDone=true;
+            document.getElementById('progFill').className='prog-fill ok';
+            log('ok','Калибровка завершена');
+            setBanner('sb-calib','анализирую...');
+        }else if(!S.isValid){
+            const faceStatus=S.faceOk?'лицо найдено':'ищу лицо...';
+            setBanner('sb-calib',`калибровка ${pct}% — ${faceStatus}`);
+        }
+    }
+}
+
+// ================================================================
+//  ГЕОМЕТРИЯ
+// ================================================================
+function faceBox(lm,vw,vh){
+    // Инициализация — от рамки кадра (в v8 стояло 1px → вечное «clipped»)
+    let x0=vw,y0=vh,x1=0,y1=0;
+    const step=4;
+    for(let i=0;i<lm.length;i+=step){
+        const p=lm[i];
+        const px=Math.min(Math.max(p.x,0),1)*vw;
+        const py=Math.min(Math.max(p.y,0),1)*vh;
+        if(px<x0)x0=px;if(px>x1)x1=px;
+        if(py<y0)y0=py;if(py>y1)y1=py;
+    }
+    return{x:x0,y:y0,w:Math.max(0,x1-x0),h:Math.max(0,y1-y0)};
+}
+
+// рамка по кольцу лендмарков с запасом
+function ringBox(lm,ids,vw,vh,pad){
+    let x0=vw,y0=vh,x1=0,y1=0;
+    ids.forEach(id=>{
+        const p=lm[id];if(!p)return;
+        const px=Math.min(Math.max(p.x,0),1)*vw;
+        const py=Math.min(Math.max(p.y,0),1)*vh;
+        if(px<x0)x0=px;if(px>x1)x1=px;
+        if(py<y0)y0=py;if(py>y1)y1=py;
+    });
+    const pw=(x1-x0)*pad,ph=(y1-y0)*pad;
+    const cx0=Math.max(1,Math.floor(x0-pw)),cy0=Math.max(1,Math.floor(y0-ph));
+    const cx1=Math.min(vw-2,Math.ceil(x1+pw)),cy1=Math.min(vh-2,Math.ceil(y1+ph));
+    return{x:cx0,y:cy0,w:Math.max(1,cx1-cx0),h:Math.max(1,cy1-cy0)};
+}
+
+function avgRGB(ctx,roi){
+    try{
+        const id=ctx.getImageData(roi.x,roi.y,roi.w,roi.h);
+        const d=id.data;
+        let r=0,g=0,b=0,n=0;
+        for(let i=0;i<d.length;i+=16){r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
+        return n?{r:r/n,g:g/n,b:b/n}:{r:128,g:128,b:128};
+    }catch(e){return{r:128,g:128,b:128};}
+}
+
+// ================================================================
+//  OVERLAY
+// ================================================================
+function drawZones(ctx,lm,vw,vh,W,H,bF,bL,bR,bEyeR,bEyeL,bNose,anchors){
+    const sx=W/vw,sy=H/vh;
+
+    // КОНТРОЛЬНЫЕ РАМКИ: глаза и нос (в замере не участвуют)
+    const drawCtrl=(box,color,label)=>{
+        let rx=box.x*sx,ry=box.y*sy,rw=box.w*sx,rh=box.h*sy;
+        if(S.mirror)rx=W-rx-rw;
+        ctx.setLineDash([4,3]);
+        ctx.strokeStyle=color;ctx.lineWidth=1.5;
+        ctx.strokeRect(rx,ry,rw,rh);
+        ctx.setLineDash([]);
+        ctx.fillStyle=color;ctx.font='bold 9px Courier New';
+        ctx.fillText(label,rx+2,ry-3);
+    };
+    drawCtrl(bEyeR,'#ff5577','ГЛАЗ');
+    drawCtrl(bEyeL,'#ff5577','ГЛАЗ');
+    drawCtrl(bNose,'#c0c0c0','НОС');
+
+    // облако точек (дешёвый fillRect, каждая 2-я)
+    ctx.fillStyle='rgba(255,255,255,0.12)';
+    for(let i=0;i<lm.length;i+=2){
+        const p=lm[i];
+        const px=S.mirror?W-p.x*W:p.x*W;
+        ctx.fillRect(px,p.y*H,1.5,1.5);
+    }
+
+    // кресты-якоря: глаза, брови, рот, контур
+    ctx.strokeStyle='#ffdd00';ctx.lineWidth=1;
+    [[A.eyeR_out,A.eyeR_in],[A.eyeL_in,A.eyeL_out]].forEach(pair=>{
+        pair.forEach(id=>{
+            const p=lm[id];if(!p)return;
+            const x=(S.mirror?W-p.x*W:p.x*W),y=p.y*H;
+            ctx.beginPath();ctx.moveTo(x-4,y);ctx.lineTo(x+4,y);
+            ctx.moveTo(x,y-4);ctx.lineTo(x,y+4);ctx.stroke();
+        });
+    });
+
+    const drawB=(box,color,label)=>{
+        let rx=box.x*sx,ry=box.y*sy,rw=box.w*sx,rh=box.h*sy;
+        if(rw<4||rh<4)return;
+        if(S.mirror)rx=W-rx-rw;
+        ctx.strokeStyle=color;ctx.lineWidth=2;
+        ctx.strokeRect(rx,ry,rw,rh);
+        ctx.globalAlpha=0.08;ctx.fillStyle=color;
+        ctx.fillRect(rx,ry,rw,rh);ctx.globalAlpha=1;
+        ctx.fillStyle=color;ctx.font='bold 10px Courier New';
+        ctx.fillText(label,rx+2,ry-3);
+    };
+
+    drawB(bF,S.foreheadOk?(S.isValid?'#00ff88':'#ff9900'):'#666666',
+           S.foreheadOk?'ЛОБ':'ЛОБ✗');
+    drawB(bL,'#4488ff','Щ.Л');
+    drawB(bR,'#4488ff','Щ.П');
+
+    // размер зон в пикселях — видно, как они масштабируются с лицом
+    ctx.fillStyle='#4488ff';ctx.font='9px Courier New';
+    ctx.fillText(`зоны ${Math.round(bF.w*bF.h/100)/10}k+${Math.round(bL.w*bL.h/100)/10}k×2 px`,
+        S.mirror?W-140:6,H-6);
+}
+
+// ================================================================
+//  АНАЛИЗ
+// ================================================================
+function analyze(){
+    const N=S.sigR.length;
+    if(N<60){ softWait(); return; }
+
+    // санитария времени (+motion синхронно)
+    for(let i=0;i<S.times.length;i++){
+        if(!Number.isFinite(S.times[i])){
+            S.times.splice(i,1);S.sigR.splice(i,1);S.sigG.splice(i,1);S.sigB.splice(i,1);
+            if(S.motion.length>i)S.motion.splice(i,1);
+            return softWait();
+        }
+    }
+    while(S.motion.length<S.times.length)S.motion.push(0);
+    while(S.motion.length>S.times.length)S.motion.shift();
+
+    const span=(S.times[N-1]-S.times[0])/1000;
+    if(!Number.isFinite(span)||span<4){ softWait(); return; }
+    const fs=(N-1)/span;
+    if(!Number.isFinite(fs)||fs<CFG.FS_MIN||fs>120){
+        softFail(`частота сэмплов ${Number.isFinite(fs)?fs.toFixed(1):'?'} Гц — нужно ≥${CFG.FS_MIN}`);
+        return;
+    }
+
+    // ── гейт движения: доля «подвижных» сэмплов за последние 10с ──
+    const mT=S.motion.slice(-Math.round(fs*10));
+    const mFrac=mT.length?mT.filter(v=>v>CFG.MOVE_MAX).length/mT.length:0;
+    if(mFrac>CFG.MOVE_FRAC){
+        onAnalysisFail(`движение (${Math.round(mFrac*100)}% сэмплов)`);
+        return;
+    }
+
+    // ── канонический CHROM ──
+    const mR=mean(S.sigR)||1,mG=mean(S.sigG)||1,mB=mean(S.sigB)||1;
+    if(!Number.isFinite(mR)||!Number.isFinite(mG)||!Number.isFinite(mB)){
+        softFail('сигнал повреждён');return;
+    }
+    const Xn=S.sigR.map((v,i)=>3*v/mR-2*S.sigG[i]/mG);
+    const Yn=S.sigR.map((v,i)=>1.5*v/mR+S.sigG[i]/mG-1.5*S.sigB[i]/mB);
+
+    const Xf=butterBP(detrend(Xn,Math.round(fs*3)),fs,CFG.BP_LO,CFG.BP_HI);
+    const Yf=butterBP(detrend(Yn,Math.round(fs*3)),fs,CFG.BP_LO,CFG.BP_HI);
+    const sX=stdDev(Xf),sY=stdDev(Yf),alpha=sY>0?sX/sY:1;
+    const pulse=Xf.map((v,i)=>v-alpha*Yf[i]);
+
+    S.chromSig=Xn.map((v,i)=>v-alpha*Yn[i]);
+    S.filtered=pulse;
+
+    // ── шум и адаптивный порог ──
+    const nyq=fs/2;
+    const nHi=Math.min(7.0,nyq*0.85);
+    const nLo=3.3;
+    if(nHi-nLo>=0.45){
+        const noiseSig=butterBP(detrend(S.chromSig,Math.round(fs*3)),fs,nLo,nHi);
+        S.noise=stdDev(noiseSig.slice(Math.round(fs*2)));
+        if(!Number.isFinite(S.noise))S.noise=0;
+    }else S.noise=0;
+    const noiseK=fs>=16?CFG.NOISE_K:1.1;
+    S.ampThr=S.noise>0
+        ?Math.min(CFG.AMP_MAX,Math.max(CFG.MIN_AMP,noiseK*S.noise))
+        :CFG.MIN_AMP;
+
+    const tail=Math.min(pulse.length,Math.round(fs*8));
+    const amp=stdDev(pulse.slice(-tail));
+    if(!Number.isFinite(amp)){ softFail('нет данных (амплитуда NaN)');return; }
+    S.amplitude=amp;
+    setD('dAmp',amp.toFixed(4),amp>=S.ampThr?'g':amp>=S.ampThr*0.5?'y':'r');
+    if(amp<S.ampThr){
+        onAnalysisFail(`слабый сигнал A:${amp.toFixed(4)}/${S.ampThr.toFixed(4)}`);
+        return;
+    }
+
+    // ── пропускаем стартовый транзиент фильтра (~1.2с) ──
+    const skip=Math.round(fs*1.2);
+    const sigP=pulse.slice(skip);
+    const tmsP=S.times.slice(skip);
+
+    // ── СПЕКТР (периодограмма Ханна): главный ответ про пульс ──
+    const spec=spectrum(sigP,tmsP,CFG.BP_LO,CFG.BP_HI);
+    const hrSpec=Math.round(spec.hr);
+
+    // ── пики: рефрактерный интервал от автокорреляции ──
+    const lag=dominantPeriod(sigP,fs);
+    let peaks=[];
+    if(lag>0){
+        const refr=Math.max(CFG.PEAK_MIN_SEC,0.65*lag/fs);
+        peaks=findPeaks(sigP,Math.round(fs*refr)).map(i=>i+skip);
+    }else{
+        peaks=findPeaks(sigP,Math.round(fs*CFG.PEAK_MIN_SEC)).map(i=>i+skip);
+    }
+    S.peaks=peaks;
+    setD('dPeaks',peaks.length,peaks.length>=CFG.MIN_PEAKS?'g':peaks.length>=2?'y':'r');
+
+    // ── PLL-трекер ритма: пропуски заполняет, лишнее отбрасывает ──
+    const trk=feedTracker(peaks.map(i=>S.times[i]),S.times[N-1]);
+
+    // ── решение о пульсе ──
+    let hr=0,mode='';
+    if(trk.locked&&trk.accept.length>=5){
+        const rr=[];
+        for(let i=1;i<trk.accept.length;i++){
+            const d=trk.accept[i]-trk.accept[i-1];
+            if(d>=CFG.RR_MIN&&d<=Math.min(CFG.RR_MAX,1.45*trk.period))rr.push(d);
+        }
+        if(rr.length<3){
+            onAnalysisFail(`ритм: мало ударов подряд (${trk.accept.length})`);
+            return;
+        }
+        const cv=stdDev(rr)/(rr.reduce((a,b)=>a+b,0)/rr.length);
+        S.rrCV=cv;
+        setD('dReg',Math.round((1-cv)*100)+'%',
+            cv<=CFG.MAX_CV?'g':cv<=CFG.MAX_CV*1.5?'y':'r');
+        if(cv>CFG.MAX_CV){
+            onAnalysisFail(`нерегулярно CV:${cv.toFixed(2)}`);
+            return;
+        }
+        const hrTrk=60000/trk.period;
+        const dSpec=Math.abs(hrTrk-hrSpec);
+        if(spec.snr>=CFG.SNR_MIN&&dSpec>0.15*hrSpec){
+            onAnalysisFail(`ритм ${Math.round(hrTrk)} ≠ спектр ${hrSpec}`);
+            return;
+        }
+        if(spec.snr>=CFG.SNR_MIN&&dSpec>0.04*hrSpec){
+            // трекер ушёл от спектра (квантование лага при низком fps) —
+            // спектр на 20с окне точнее: подтягиваем период к нему
+            trk.period=Math.round(60000/hrSpec);
+        }
+        hr=60000/trk.period;
+        S.rrClean=rr;
+        S.rmssd=Math.round(calcRMSSD(rr));
+        mode='ритм';
+    }else if(spec.snr>=CFG.SNR_MIN&&hrSpec>=42&&hrSpec<=180){
+        hr=spec.hr;                        // спектральная оценка (≈)
+        mode='спектр ≈';
+    }else{
+        onAnalysisFail(`сигнал не выделяется SNR:${spec.snr.toFixed(1)}`);
+        return;
+    }
+
+    // ── успех ──
+    S.failStreak=0;
+    S.lostSince=0;
+    S.validStreak++;
+
+    if(S.validStreak>=CFG.VALID_NEED){
+        S.isValid=true;
+        S.hrBuf.push(hr);
+        if(S.hrBuf.length>CFG.HR_WIN)S.hrBuf.shift();
+        S.hr=Math.round(S.hrBuf.reduce((a,b)=>a+b,0)/S.hrBuf.length);
+        S.stress=calcStress(S.hr,S.rmssd||40);
+        S.hrHistory.push(S.hr);
+        if(S.hrHistory.length>120)S.hrHistory.shift();
+        updateHR();
+        updateHRV();
+        checkTriggers();
+        setBanner('sb-valid',`❤ ${S.hr} уд/мин ${mode}`);
+    }else{
+        setBanner('sb-confirm',`подтверждение ${S.validStreak}/${CFG.VALID_NEED}...`);
+    }
+}
+
+// тихое ожидание — баннер обновляется, не залипает
+function softWait(){
+    if(!S.isValid)
+        setBanner('sb-calib','накапливаю сигнал...');
+}
+// мягкий отказ с причиной (амплитуда тут ни при чём — показываем причину)
+function softFail(reason){
+    document.getElementById('hrSub').textContent=reason;
+    if(!S.isValid) setBanner('sb-weak',reason);
+}
+
+function onAnalysisFail(reason){
+    S.failStreak++;
+    document.getElementById('hrSub').textContent=reason;
+    if(S.failStreak>=CFG.FAIL_TOLERANCE){
+        const wasValid=S.isValid;
+        S.isValid=false;
+        S.validStreak=0;
+        if(S.hrBuf.length>0)S.hrBuf.shift();
+        if(wasValid){
+            // гистерезис: последний пульс держим 10с жёлтым, не мигаем '--'
+            S.lostSince=performance.now();
+            document.getElementById('hrNum').className='hr-num warn';
+            log('warn','Потеря сигнала: '+reason);
+        }
+        if(S.lostSince&&performance.now()-S.lostSince>CFG.LOST_HOLD){
+            const el=document.getElementById('hrNum');
+            el.textContent='--';el.className='hr-num';
+        }
+        setBanner('sb-weak',reason);
+    }else{
+        if(S.isValid){
+            setBanner('sb-valid',`❤ ${S.hr} уд/мин (нестаб.)`);
+        }else if(S.validStreak>0){
+            setBanner('sb-confirm',`подтверждение ${S.validStreak}/${CFG.VALID_NEED}...`);
+        }
+    }
+}
+
+// ================================================================
+//  DSP
+// =================================================================
+function mean(a){return a.reduce((s,v)=>s+v,0)/a.length;}
+function detrend(sig,win){
+    if(!Number.isFinite(win)||win<3)win=Math.max(3,Math.round(sig.length/4));
+    const h=Math.floor(win/2);
+    return sig.map((v,i)=>{
+        const lo=Math.max(0,i-h),hi=Math.min(sig.length-1,i+h);
+        let s=0;for(let j=lo;j<=hi;j++)s+=sig[j];
+        return v-s/(hi-lo+1);
+    });
+}
+function butterBP(sig,fs,f1,f2){
+    return butter2LP(butter2HP(sig,fs,f1),fs,f2);
+}
+function butter2HP(sig,fs,fc){
+    const w=2*Math.PI*fc/fs,k=Math.tan(w/2),k2=k*k,q=Math.SQRT2,a0=1+q*k+k2;
+    return biquad(sig,[1/a0,-2/a0,1/a0],[1,2*(k2-1)/a0,(1-q*k+k2)/a0]);
+}
+function butter2LP(sig,fs,fc){
+    const w=2*Math.PI*fc/fs,k=Math.tan(w/2),k2=k*k,q=Math.SQRT2,a0=1+q*k+k2;
+    return biquad(sig,[k2/a0,2*k2/a0,k2/a0],[1,2*(k2-1)/a0,(1-q*k+k2)/a0]);
+}
+function biquad(sig,b,a){
+    const out=new Array(sig.length).fill(0);
+    let x1=0,x2=0,y1=0,y2=0;
+    for(let i=0;i<sig.length;i++){
+        const x0=sig[i],y0=b[0]*x0+b[1]*x1+b[2]*x2-a[1]*y1-a[2]*y2;
+        out[i]=y0;x2=x1;x1=x0;y2=y1;y1=y0;
+    }
+    return out;
+}
+
+function findPeaks(sig,minDist){
+    const N=sig.length;
+    const pos=sig.filter(v=>v>0);
+    if(!pos.length)return[];
+    const thr=median(pos)*0.4;
+    const peaks=[];let last=-minDist;
+    const R=Math.max(1,Math.min(3,Math.round(N/100)));  // узкое окно уточнения
+    for(let i=1;i<N-1;i++){
+        if(sig[i]>thr&&sig[i]>=sig[i-1]&&sig[i]>=sig[i+1]&&i-last>=minDist){
+            let best=i;
+            for(let j=Math.max(1,i-R);j<=Math.min(N-2,i+R);j++)
+                if(sig[j]>sig[best])best=j;
+            if(best-last>=minDist){peaks.push(best);last=best;}
+        }
+    }
+    return peaks;
+}
+
+function dominantPeriod(sig,fs){
+    const n=sig.length;
+    const minLag=Math.max(2,Math.round(fs*CFG.PEAK_MIN_SEC));
+    const maxLag=Math.min(Math.round(fs*1.5),Math.floor(n/2));
+    if(maxLag<=minLag)return 0;
+    const m=mean(sig);
+    let norm=0;
+    for(let i=0;i<n;i++)norm+=(sig[i]-m)*(sig[i]-m);
+    if(norm<=0)return 0;
+    const ac=new Array(maxLag+1).fill(0);
+    let best=-Infinity;
+    for(let lag=minLag;lag<=maxLag;lag++){
+        let s=0,c=0;
+        for(let i=lag;i<n;i++){s+=(sig[i]-m)*(sig[i-lag]-m);c++;}
+        if(c>0){s/=c;ac[lag]=s;if(s>best)best=s;}
+    }
+    if(!(best>=0.25*norm/n))return 0;
+    for(let lag=minLag;lag<=maxLag;lag++)
+        if(ac[lag]>=0.95*best)return lag;
+    return 0;
+}
+
+// Периодограмма с окном Ханна: {hr, snr, f} — главный критерий качества
+function spectrum(sig,times,fLo,fHi){
+    const n=sig.length;
+    if(n<32)return{hr:0,snr:0,f:0};
+    const m=mean(sig);
+    const x=new Array(n);
+    for(let i=0;i<n;i++){
+        const w=0.5-0.5*Math.cos(2*Math.PI*i/(n-1));
+        x[i]=w*(sig[i]-m);
+    }
+    const T=(times[n-1]-times[0])/1000;
+    const df=Math.max(1/(T*4),0.004);
+    const pows=[];
+    let bestF=0,bestP=-1;
+    for(let f=fLo;f<=fHi+1e-9;f+=df){
+        let c=0,sn=0;
+        for(let i=0;i<n;i++){
+            const ph=2*Math.PI*f*(times[i]-times[0])/1000;
+            c+=x[i]*Math.cos(ph);sn+=x[i]*Math.sin(ph);
+        }
+        const p=(c*c+sn*sn)/n;
+        pows.push(p);
+        if(p>bestP){bestP=p;bestF=f;}
+    }
+    const sorted=[...pows].sort((a,b)=>a-b);
+    const md=sorted[Math.floor(sorted.length/2)]||1e-12;
+    return{hr:60*bestF,snr:bestP/md,f:bestF};
+}
+
+// PLL-трекер ритма: пики вне предсказанного слота игнорирует,
+// пропущенные удары заполняет по фазе, период подстраивает плавно
+function feedTracker(pts,now){
+    if(!S.trk)S.trk={period:0,next:0,locked:false,accept:[],hits:0,fill:0,lastFed:0};
+    const t=S.trk;
+    if(!t.locked){
+        if(pts.length>=4){
+            const rr=[];
+            for(let i=1;i<pts.length;i++){
+                const d=pts[i]-pts[i-1];
+                if(d>=CFG.RR_MIN&&d<=CFG.RR_MAX)rr.push(d);
+            }
+            if(rr.length>=3){
+                const med=median(rr);
+                const acc=[];
+                for(const p of pts){
+                    if(!acc.length){acc.push(p);continue;}
+                    const d=p-acc[acc.length-1];
+                    if(Math.abs(d-med)<=0.30*med)acc.push(p);
+                }
+                if(acc.length>=4){
+                    const ds=[];
+                    for(let i=1;i<acc.length;i++)ds.push(acc[i]-acc[i-1]);
+                    t.period=Math.round(median(ds));
+                    t.next=acc[acc.length-1]+t.period;
+                    t.locked=true;t.hits=acc.length;t.fill=0;
+                    t.accept=acc.slice(-30);
+                    t.lastFed=now;
+                }
+            }
+        }
+        return t;
+    }
+    // захват: только НОВЫЕ пики (окно перекрывается между вызовами)
+    const fresh=pts.filter(p=>p>t.lastFed);
+    for(const p of fresh){
+        if(p<t.next-0.35*t.period)continue;        // лишний/ранний — мимо
+        while(p>t.next+0.65*t.period){             // пропущенные слоты
+            t.fill++;t.next+=t.period;
+        }
+        const err=p-t.next;                        // [-0.35P .. 0.65P]
+        t.accept.push(p);t.hits++;
+        if(t.accept.length>40)t.accept.shift();
+        if(Math.abs(err)<=0.35*t.period){
+            let P=Math.round(t.period*(1+0.08*err/t.period));
+            t.period=Math.max(CFG.RR_MIN,Math.min(CFG.RR_MAX,P));
+        }
+        t.next=p+t.period;
+        t.lastFed=p;
+    }
+    if(t.lastFed<now)t.lastFed=now;
+    while(t.next<now-1.2*t.period){t.fill++;t.next+=t.period;}
+    const tot=t.hits+t.fill;
+    if(t.fill>8||(tot>10&&t.fill/Math.max(1,tot)>0.45)){
+        t.locked=false;t.accept=[];t.hits=0;t.fill=0;   // потеря захвата
+    }
+    return t;
+}
+
+function calcRMSSD(rr){
+    if(rr.length<2)return 0;
+    let s=0;
+    for(let i=1;i<rr.length;i++){const d=rr[i]-rr[i-1];s+=d*d;}
+    return Math.sqrt(s/(rr.length-1));
+}
+function calcStress(hr,rv){
+    return Math.round(
+        Math.max(0,Math.min(100,(hr-60)*2))*0.4+
+        Math.max(0,Math.min(100,100-rv*2))*0.6
+    );
+}
+function stdDev(a){
+    if(a.length<2)return 0;
+    const mn=a.reduce((s,v)=>s+v,0)/a.length;
+    return Math.sqrt(a.map(v=>(v-mn)**2).reduce((s,v)=>s+v,0)/a.length);
+}
+function median(a){
+    const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);
+    return s.length%2?s[m]:(s[m-1]+s[m])/2;
+}
+
+// ================================================================
+//  UI
+// ================================================================
+function setBanner(cls,text){
+    const el=document.getElementById('statusBanner');
+    el.className='status-banner '+cls;
+    el.textContent=text;
+}
+function setD(id,val,cls){
+    const el=document.getElementById(id);
+    el.textContent=val;
+    if(cls)el.className='dv '+cls;
+}
+function updateHR(){
+    const el=document.getElementById('hrNum');
+    el.textContent=S.hr;
+    el.className='hr-num '+(
+        S.hr>100||(S.hr<50&&S.hr>0)?'danger':S.hr>90?'warn':'valid'
+    );
+    const rra=S.rrClean.length
+        ?Math.round(S.rrClean.reduce((a,b)=>a+b,0)/S.rrClean.length):0;
+    document.getElementById('hrSub').textContent=
+        `регуляр: ${Math.round((1-S.rrCV)*100)}% | R-R: ${rra}мс`;
+}
+function updateHRV(){
+    const sv=(id,v,wFn,bFn)=>{
+        const el=document.getElementById(id);
+        el.textContent=v>0?v:'--';
+        el.className='hv'+(bFn&&bFn(v)?' b':wFn&&wFn(v)?' w':'');
+    };
+    sv('hvR',S.rmssd,v=>v<25&&v>0,v=>v<15&&v>0);
+    sv('hvS',S.stress,v=>v>50,v=>v>75);
+    const rra=S.rrClean.length
+        ?Math.round(S.rrClean.reduce((a,b)=>a+b,0)/S.rrClean.length):0;
+    sv('hvRR',rra);
+}
+function checkTriggers(){
+    if(!S.isValid)return;
+    const now=Date.now();
+    const t=(key,type,msg)=>{
+        if(!S.lastTriggers[key]||now-S.lastTriggers[key]>CFG.TRIGGER_CD){
+            S.lastTriggers[key]=now;log(type,msg);
+        }
+    };
+    if(S.hr>100)     t('tach','err',`Тахикардия: ${S.hr} уд/мин`);
+    else if(S.hr<50) t('brad','err',`Брадикардия: ${S.hr} уд/мин`);
+    else             t('ok','ok',`Пульс: ${S.hr} уд/мин`);
+    if(S.rmssd>0&&S.rmssd<15)t('hl','err','HRV критически низкий');
+    if(S.stress>75)  t('sh','err',`Высокий стресс: ${S.stress}%`);
+}
+
+let logN=0;
+function log(type,msg){
+    logN++;
+    const box=document.getElementById('logBox');
+    const row=document.createElement('div');
+    row.className='lr';
+    row.innerHTML=`<span class="lrt">${new Date().toTimeString().slice(0,8)}</span>`+
+        `<span class="lrm ${type}">${msg}</span>`;
+    box.insertBefore(row,box.firstChild);
+    if(logN>50)box.removeChild(box.lastChild);
+}
+
+// ================================================================
+//  ГРАФИКИ
+// ================================================================
+function redrawCharts(){
+    if(S.chromSig.length>=2)
+        plotLine('cvSig',S.chromSig.slice(-300),'#4488ff','lSig',
+            d=>d[d.length-1].toFixed(4));
+    if(S.filtered.length>=2)plotFilt();
+    if(S.hrHistory.length>=2)plotHR();
+    if(S.rrClean.length>=3)plotRR();
+}
+
+function plotFilt(){
+    const d=S.filtered.slice(-300);if(d.length<2)return;
+    const cv=document.getElementById('cvFilt');
+    const ctx=cv.getContext('2d');
+    const W=cv.offsetWidth||300,H=cv.offsetHeight||65;
+    cv.width=W;cv.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);grd(ctx,W,H);
+    const mn=Math.min(...d),mx=Math.max(...d),rng=mx-mn||1;
+    const sy=v=>H-((v-mn)/rng)*H*0.85-H*0.075;
+    ctx.strokeStyle='#00ff88';ctx.lineWidth=1.5;
+    ctx.shadowColor='#00ff88';ctx.shadowBlur=3;
+    ctx.beginPath();
+    d.forEach((v,i)=>{
+        const x=(i/(d.length-1))*W;
+        i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));
+    });
+    ctx.stroke();ctx.shadowBlur=0;
+    if(S.peaks.length&&S.filtered.length){
+        const off=S.filtered.length-d.length;
+        ctx.fillStyle='#ff3300';
+        S.peaks.forEach(pi=>{
+            const di=pi-off;
+            if(di>=0&&di<d.length){
+                ctx.beginPath();
+                ctx.arc((di/(d.length-1))*W,sy(d[di]),4,0,Math.PI*2);
+                ctx.fill();
+            }
+        });
+    }
+    document.getElementById('lFilt').textContent=`A:${S.amplitude.toFixed(4)} порог:${S.ampThr.toFixed(4)}`;
+}
+
+function plotHR(){
+    const d=S.hrHistory;if(d.length<2)return;
+    const cv=document.getElementById('cvHR');
+    const ctx=cv.getContext('2d');
+    const W=cv.offsetWidth||300,H=cv.offsetHeight||65;
+    cv.width=W;cv.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);
+    const mn=Math.max(40,Math.min(...d)-5);
+    const mx=Math.min(180,Math.max(...d)+5);
+    const rng=mx-mn||1;
+    [[40,60,'rgba(0,80,255,0.08)'],[60,100,'rgba(0,255,136,0.08)'],
+     [100,140,'rgba(255,140,0,0.08)'],[140,180,'rgba(255,40,40,0.08)']
+    ].forEach(([a,b,c])=>{
+        const y1=H-((Math.min(b,mx)-mn)/rng)*H;
+        const y2=H-((Math.max(a,mn)-mn)/rng)*H;
+        if(y1<y2){ctx.fillStyle=c;ctx.fillRect(0,y1,W,y2-y1);}
+    });
+    ctx.strokeStyle='#ff6600';ctx.lineWidth=2;
+    ctx.shadowColor='#ff6600';ctx.shadowBlur=5;
+    ctx.beginPath();
+    d.forEach((v,i)=>{
+        const x=(i/(d.length-1))*W,y=H-((v-mn)/rng)*H;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();ctx.shadowBlur=0;
+    document.getElementById('lHR').textContent=`${S.hr} уд/мин`;
+}
+
+function plotRR(){
+    const rr=S.rrClean;if(rr.length<3)return;
+    const cv=document.getElementById('cvRR');
+    const ctx=cv.getContext('2d');
+    const W=cv.offsetWidth||300,H=cv.offsetHeight||85;
+    cv.width=W;cv.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);
+    const mn=Math.min(...rr)-30,mx=Math.max(...rr)+30,rng=mx-mn||1;
+    const avg=rr.reduce((a,b)=>a+b,0)/rr.length;
+    const avgY=H-((avg-mn)/rng)*H;
+    ctx.strokeStyle='rgba(0,255,136,0.25)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(0,avgY);ctx.lineTo(W,avgY);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,255,136,0.4)';ctx.font='10px Courier New';
+    ctx.fillText(`avg:${Math.round(avg)}мс`,4,avgY-4);
+    const bw=Math.max(3,W/rr.length-2);
+    rr.forEach((v,i)=>{
+        const x=(i/rr.length)*W,y=H-((v-mn)/rng)*H;
+        const dev=Math.abs(v-avg);
+        ctx.fillStyle=dev<30?'#00ff88':dev<80?'#ff9900':'#ff3333';
+        ctx.fillRect(x,y,bw,H-y);
+        if(i>0){
+            const px=((i-1)/rr.length)*W+bw/2;
+            const py=H-((rr[i-1]-mn)/rng)*H;
+            ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x+bw/2,y);ctx.stroke();
+        }
+    });
+    document.getElementById('lRR').textContent=`RMSSD:${S.rmssd}мс`;
+}
+
+function plotLine(id,data,color,lblId,fmtFn){
+    const cv=document.getElementById(id);
+    const ctx=cv.getContext('2d');
+    const W=cv.offsetWidth||300,H=cv.offsetHeight||65;
+    cv.width=W;cv.height=H;
+    ctx.fillStyle='#0c0c14';ctx.fillRect(0,0,W,H);grd(ctx,W,H);
+    const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||0.001;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;
+    ctx.shadowColor=color;ctx.shadowBlur=3;
+    ctx.beginPath();
+    data.forEach((v,i)=>{
+        const x=(i/(data.length-1))*W;
+        const y=H-((v-mn)/rng)*H*0.85-H*0.075;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();ctx.shadowBlur=0;
+    if(lblId&&fmtFn)
+        document.getElementById(lblId).textContent=fmtFn(data);
+}
+
+function grd(ctx,W,H){
+    ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+    for(let i=1;i<4;i++){
+        const y=H/4*i;
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    }
+}
+
+window.addEventListener('resize',redrawCharts);
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2fc9138de87042f',t:'MTc4NzUxMzc5OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
