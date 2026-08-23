@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Психометр v7</title>
+    <title>Психометр v8</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -31,6 +31,7 @@
             background:#000; overflow:hidden;
         }
         #videoEl { width:100%; height:220px; object-fit:cover; display:block; }
+        #videoEl.mirrored { transform:scaleX(-1); }
         #drawCanvas {
             position:absolute; top:0; left:0;
             width:100%; height:220px; pointer-events:none;
@@ -71,13 +72,13 @@
             display:grid; grid-template-columns:repeat(4,1fr);
             gap:1px; background:#111; border-bottom:1px solid #1a1a2e;
         }
-        .dc{background:#0c0c14;padding:6px 4px;text-align:center;}
+        .dc{background:#0c0c14;padding:8px 6px;text-align:center;}
         .dn{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:1px;}
-        .dv{font-size:13px;font-weight:bold;color:#888;margin-top:2px;}
+        .dv{font-size:15px;font-weight:bold;margin-top:3px;color:#888;}
         .dv.g{color:#00ff88;}.dv.y{color:#ff9900;}.dv.r{color:#ff3333;}
 
         .hr-display {
-            padding:14px 16px; text-align:center;
+            padding:14px 16px 10px; text-align:center;
             background:#0a0a10; border-bottom:1px solid #1a1a2e;
         }
         .hr-num {
@@ -115,7 +116,7 @@
         .hv.w{color:#ff9900;}.hv.b{color:#ff3333;}
         .hu{font-size:9px;color:#444;}
 
-        .log-wrap{padding:10px 16px 20px;}
+        .log-wrap{padding:10px 16px 8px;}
         .lt{font-size:10px;color:#555;text-transform:uppercase;margin-bottom:5px;}
         .lb{
             background:#0c0c14;border:1px solid #1a1a2e;
@@ -128,12 +129,17 @@
         .lrm{color:#888;}
         .lrm.ok{color:#00ff88;}.lrm.warn{color:#ff9900;}
         .lrm.err{color:#ff3333;}.lrm.info{color:#4488ff;}
+
+        .footer{
+            padding:8px 16px 20px;font-size:9px;color:#444;
+            text-align:center;line-height:1.6;
+        }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>⚡ ПСИХОМЕТР v7</h1>
+    <h1>⚡ ПСИХОМЕТР v8</h1>
     <span id="fpsLbl" style="font-size:11px;color:#444">--</span>
 </div>
 
@@ -199,81 +205,108 @@
     <div class="lb" id="logBox"></div>
 </div>
 
+<div class="footer">
+    Экспериментальный демонстратор rPPG. Не является медицинским прибором.<br>
+    Пульс — оценка ±3–7 уд/мин при хорошем свете. RMSSD/стресс — ориентировочно.
+</div>
+
 <script>
 // ================================================================
-//  ПСИХОМЕТР v7
+//  ПСИХОМЕТР v8
 //
-//  Главные исправления:
-//  1. НЕ используем MediaPipe Camera utility — только send()
-//  2. Калибровка идёт по РЕАЛЬНОМУ времени, не по кадрам
-//  3. Калибровка продолжается даже если лицо пропало
-//  4. validStreak НЕ сбрасывается при одиночной потере лица
-//  5. Watchdog — если кадры перестали приходить, перезапуск
-//  6. requestAnimationFrame цикл полностью под нашим контролем
+//  Исправления относительно v7:
+//  1. ЗАЗОРЯМ ЗАВИСАНИЕ: send() больше НЕ await-ится в rAF-цикле —
+//     кадр отправляется fire-and-forget с флагом busy; rAF живёт всегда
+//  2. Watchdog РЕАЛЬНО РАБОТАЕТ: нет ответа 3с → сброс busy;
+//     3 сбоя / 6с без результатов → faceMesh.reset() + re-init
+//  3. ПРАВИЛЬНЫЕ ЗОНЫ: щёки больше не на глазах (индексы подобраны по
+//     canonical_face_model.obj: щека = 60% пути глаз→рот, в стороне от
+//     глаз/рта/контура). Лоб — без висков и переносицы
+//  4. ЗОНЫ МАСШТАБИРУЮТСЯ вместе с лицом и НЕ ВЫХОДЯТ за кадр:
+//     если лоб обрезан (камера близко) — вес лба = 0, работают щёки;
+//     подсказки «придвиньте/отодвиньте камеру»
+//  5. Метки времени — video.currentTime (не performance.now()):
+//     джиттер обработки больше не портит R-R интервалы
+//  6. Анализ по времени (раз в 600мс), а не «каждый 15-й кадр»
+//  7. Канонический CHROM (нормировка на среднее по буферу,
+//     полосовая фильтрация X и Y до объединения)
+//  8. АДАПТИВНЫЙ порог амплитуды: шум меряется в полосе 3.5–7 Гц,
+//     порог = max(MIN_AMP, 1.5×шум) — работает и при слабом свете
+//  9. R-R: медианная фильтрация выбросов (>25% от медианы)
+// 10. Зеркальное превью для фронтальной камеры
+// 11. Ошибки в onResults больше не могут убить конвейер (try/catch)
 // ================================================================
 
-const FOREHEAD=[10,151,9,8,107,66,105,104,103,67,109,338,297,332,333,334,296,336,285];
-const L_CHEEK =[234,227,116,111,117,118,119,120,121,128,126,142,36,205,187,123];
-const R_CHEEK =[454,447,345,340,346,347,348,349,350,357,355,371,266,425,411,352];
+// Зоны подобраны по canonical_face_model.obj (468 вершин):
+// FOREHEAD: от линии бровей до верхней точки лба, 52% ширины лица,
+//           без висков (фон) и переносицы (смещает бокс вниз)
+// L/R_CHEEK: центр на 60% пути глаз→рот, 28% ширины лица, вдали
+//           от глаз (t>0.36), рта и контура лица (фон)
+const FOREHEAD=[9,10,66,67,105,107,109,151,296,297,334,336,338];
+const L_CHEEK =[36,50,92,101,123,142,187,203,205,206,207,216];
+const R_CHEEK =[266,280,322,330,352,371,411,423,425,426,427,436];
 
 const CFG={
     BUF_SEC:    10,
     CALIB_SEC:  5,
     BP_LO:      0.7,
     BP_HI:      3.0,
+    NOISE_LO:   3.5,    // полоса для оценки шума (вне пульсового диапазона)
+    NOISE_HI:   7.0,
+    NOISE_K:    1.5,    // порог = max(MIN_AMP, NOISE_K * шум)
+    MIN_AMP:    0.0025,
+    AMP_MAX:    0.03,
     PEAK_MIN_SEC: 0.33,
-    MIN_AMP:    0.003,
     MIN_PEAKS:  4,
-    MAX_CV:     0.40,   // немного мягче
-    // Сколько подряд ПРОВАЛОВ допускаем перед сбросом validStreak
+    MAX_CV:     0.40,
     FAIL_TOLERANCE: 3,
     VALID_NEED: 3,
     RR_MIN:     350,
     RR_MAX:     1500,
+    RR_OUT:     0.25,   // выброс: отклонение > 25% от медианы R-R
     HR_WIN:     6,
     TRIGGER_CD: 20000,
-    // Watchdog: если за это время не пришёл кадр — считаем зависание
-    WATCHDOG_MS: 3000,
+    ANALYZE_MS: 600,    // анализ по времени, не по кадрам
+    WATCHDOG_MS:3000,
+    FACE_MIN:   0.22,   // лицо < 22% ширины кадра — придвинуть
 };
 
 const S={
     faceMesh:   null,
     stream:     null,
     facing:     'user',
+    mirror:     true,
     running:    false,
     mpReady:    false,
 
     // Сигнал
-    sigR:[],sigG:[],sigB:[],times:[],
+    sigR:[],sigG:[],sigB:[],times:[],   // times = video.currentTime*1000
     chromSig:[],filtered:[],
     peaks:[],rr:[],rrClean:[],
 
     // Метрики
     fps:0, fpsCount:0, fpsTimer:0,
-    amplitude:0, rrCV:0,
-    hr:0, hrBuf:[], hrHistory:[],
-    rmssd:0, stress:0,
+    amplitude:0, ampThr:CFG.MIN_AMP, noise:0, rrCV:0,
+    hr:0, hrBuf:[], hrHistory:[], rmssd:0, stress:0,
 
     // Состояние
-    isValid:        false,
-    validStreak:    0,
-    failStreak:     0,   // сколько подряд провалов анализа
-    faceOk:         false,
-    faceFrames:     0,   // кадров с лицом подряд
-    noFaceFrames:   0,   // кадров без лица подряд
+    isValid:false, validStreak:0, failStreak:0,
+    faceOk:false, faceFrames:0, noFaceFrames:0,
+    foreheadOk:true, faceHint:'',
 
-    // Калибровка — по реальному времени
-    calibDone:      false,
-    calibStart:     0,   // performance.now() когда начали
+    calibDone:false, calibStart:0,
 
-    // Счётчики кадров
-    frameN:         0,
-    lastFrameTime:  0,   // для watchdog
+    frameN:0, lastFrameTime:0, lastAnalyze:0,
 
-    // Холст для захвата
-    hc:   null,
-    hctx: null,
+    // Frame pipeline
+    busy:false,          // faceMesh.send() в полёте
+    lastSentTime:-1,     // video.currentTime последнего отправленного кадра
+    lastSendAt:0,
+    lastResAt:0,         // последний onResults
+    wdFails:0,
+    recovering:false,
 
+    hc:null, hctx:null,
     lastTriggers:{},
 };
 
@@ -297,16 +330,23 @@ bLog('Загрузка...','wait');
     const s1=document.createElement('script');
     s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js';
     s1.crossOrigin='anonymous';
-    s1.onload=()=>{
-        bLog('✓ face_mesh.js','ok');
-        initMP();
-    };
-    s1.onerror=()=>{
-        bLog('✗ Не загружен — проверьте интернет','err');
-        readyNoMP();
-    };
+    s1.onload=()=>{ bLog('✓ face_mesh.js','ok'); initMP(); };
+    s1.onerror=()=>{ bLog('✗ Не загружен — проверьте интернет','err'); readyNoMP(); };
     document.head.appendChild(s1);
 })();
+
+function createMesh(){
+    S.faceMesh=new FaceMesh({
+        locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
+    });
+    S.faceMesh.setOptions({
+        maxNumFaces:1,
+        refineLandmarks:false,
+        minDetectionConfidence:0.4,
+        minTrackingConfidence:0.4,
+    });
+    S.faceMesh.onResults(onFaceResults);
+}
 
 async function initMP(){
     if(typeof FaceMesh==='undefined'){
@@ -315,28 +355,16 @@ async function initMP(){
     }
     bLog('Инициализация FaceMesh...','wait');
     try{
-        S.faceMesh=new FaceMesh({
-            locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${f}`
-        });
-        S.faceMesh.setOptions({
-            maxNumFaces:1,
-            refineLandmarks:false,
-            minDetectionConfidence:0.4,
-            minTrackingConfidence: 0.4,
-        });
-        S.faceMesh.onResults(onFaceResults);
-
+        createMesh();
         bLog('Загрузка WASM модели...','wait');
         await Promise.race([
             S.faceMesh.initialize(),
             new Promise((_,r)=>setTimeout(()=>r(new Error('таймаут 30с')),30000))
         ]);
-
         bLog('✓ MediaPipe готов','ok');
         S.mpReady=true;
         setBanner('sb-idle','Готово — нажмите Старт');
         document.getElementById('btnStart').disabled=false;
-
     }catch(e){
         bLog('✗ '+e.message,'err');
         readyNoMP();
@@ -350,13 +378,38 @@ function readyNoMP(){
     document.getElementById('btnStart').disabled=false;
 }
 
+// Восстановление после сбоя WASM/GL — вместо зависания v7
+async function recoverFaceMesh(){
+    if(S.recovering||typeof FaceMesh==='undefined') return;
+    S.recovering=true;
+    setBanner('sb-loading','восстановление FaceMesh...');
+    log('warn','Перезапуск FaceMesh');
+    try{
+        try{ S.faceMesh.reset(); }catch(_){}
+        await Promise.race([
+            S.faceMesh.initialize(),
+            new Promise((_,r)=>setTimeout(()=>r(new Error('таймаут 20с')),20000))
+        ]);
+        log('ok','FaceMesh восстановлен');
+        bLog('✓ FaceMesh восстановлен','ok');
+    }catch(e){
+        log('err','Восстановление не удалось: '+(e.message||e));
+        bLog('✗ Восстановление не удалось — базовый режим','err');
+        S.mpReady=false; // переключаемся на базовый режим, не зависаем
+    }
+    S.recovering=false;
+    S.busy=false;
+    S.wdFails=0;
+    S.lastResAt=performance.now();
+    S.lastSentTime=-1;
+}
+
 // ================================================================
 //  КАМЕРА
 // ================================================================
 async function startAll(){
     document.getElementById('btnStart').disabled=true;
     try{
-        // Стоп предыдущей сессии
         if(S.stream) S.stream.getTracks().forEach(t=>t.stop());
 
         S.stream=await navigator.mediaDevices.getUserMedia({
@@ -372,13 +425,15 @@ async function startAll(){
         await new Promise(r=>{v.onloadedmetadata=r;});
         await v.play();
 
+        S.mirror=(S.facing==='user');
+        v.classList.toggle('mirrored',S.mirror);
+
         const t=S.stream.getVideoTracks()[0].getSettings();
         bLog(`✓ ${t.width}x${t.height}@${Math.round(t.frameRate||30)}fps`,'ok');
 
         document.getElementById('btnFlip').disabled=false;
         document.getElementById('btnStop').disabled=false;
 
-        // Создаём скрытый canvas
         S.hc=document.createElement('canvas');
         S.hctx=S.hc.getContext('2d',{willReadFrequently:true});
 
@@ -387,10 +442,7 @@ async function startAll(){
         S.calibStart=performance.now();
         setBanner('sb-calib','калибровка — смотрите в камеру');
 
-        // Запускаем наш собственный цикл
-        // НЕ используем MediaPipe Camera utility
         mainLoop();
-
         bLog('✓ Цикл запущен','ok');
 
     }catch(e){
@@ -408,6 +460,7 @@ function flipCamera(){
 
 function stopAll(resetUI=true){
     S.running=false;
+    if(loopId!==null){cancelAnimationFrame(loopId);loopId=null;}
     if(S.stream){S.stream.getTracks().forEach(t=>t.stop());S.stream=null;}
     if(resetUI){
         document.getElementById('btnStart').disabled=false;
@@ -423,12 +476,16 @@ function resetState(){
         sigR:[],sigG:[],sigB:[],times:[],
         chromSig:[],filtered:[],peaks:[],rr:[],rrClean:[],
         fps:0,fpsCount:0,fpsTimer:performance.now(),
-        amplitude:0,rrCV:0,
+        amplitude:0,ampThr:CFG.MIN_AMP,noise:0,rrCV:0,
         hr:0,hrBuf:[],hrHistory:[],rmssd:0,stress:0,
         isValid:false,validStreak:0,failStreak:0,
         faceOk:false,faceFrames:0,noFaceFrames:0,
+        foreheadOk:true,faceHint:'',
         calibDone:false,
         frameN:0,lastFrameTime:performance.now(),
+        lastAnalyze:0,
+        busy:false,lastSentTime:-1,lastSendAt:0,
+        lastResAt:0,wdFails:0,recovering:false,
     });
     document.getElementById('progFill').style.width='0%';
     document.getElementById('progFill').className='prog-fill';
@@ -442,55 +499,70 @@ function resetState(){
 }
 
 // ================================================================
-//  ГЛАВНЫЙ ЦИКЛ — requestAnimationFrame
-//  Мы сами вызываем faceMesh.send() каждый кадр
+//  ГЛАВНЫЙ ЦИКЛ
+//  Ключевое отличие от v7: rAF планируется ПЕРВЫМ делом и НЕ ждёт
+//  faceMesh.send(). Зависание WASM больше не может убить цикл —
+//  watchdog заметит и восстановит.
 // ================================================================
 let loopId=null;
 
-async function mainLoop(){
+function mainLoop(){
     if(!S.running) return;
-
-    const video=document.getElementById('videoEl');
+    loopId=requestAnimationFrame(mainLoop);   // сначала — расписание
     const ts=performance.now();
 
-    // FPS
     S.fpsCount++;
     if(ts-S.fpsTimer>=1000){
         S.fps=S.fpsCount;S.fpsCount=0;S.fpsTimer=ts;
         document.getElementById('fpsLbl').textContent=`FPS:${S.fps}`;
     }
 
-    // Калибровка идёт по реальному времени ВСЕГДА
-    // независимо от того, есть лицо или нет
     updateCalib(ts);
 
-    if(video.readyState>=2){
-        S.lastFrameTime=ts;
+    const video=document.getElementById('videoEl');
+    if(video.readyState<2) return;
+    S.lastFrameTime=ts;
 
-        if(S.mpReady&&S.faceMesh){
-            // Отправляем кадр в MediaPipe
-            // Результат придёт в onFaceResults асинхронно
-            try{
-                await S.faceMesh.send({image:video});
-            }catch(e){
-                // Не крашимся — просто пропускаем кадр
-            }
-        }else{
-            // Базовый режим — обрабатываем сами
-            processBasicFrame(video, ts);
+    const frameT=video.currentTime;           // время КАДРА, не пк
+    const newFrame=(frameT!==S.lastSentTime); // дедупликация 60Гц монитора
+
+    if(S.mpReady&&S.faceMesh&&!S.recovering){
+        if(newFrame&&!S.busy){
+            S.busy=true;
+            S.lastSendAt=ts;
+            S.lastSentTime=frameT;
+            // fire-and-forget: цикл не ждёт результат
+            Promise.resolve(S.faceMesh.send({image:video}))
+                .catch(e=>{log('err','send: '+(e&&e.message||e));})
+                .finally(()=>{S.busy=false;});
+        }else if(S.busy&&ts-S.lastSendAt>CFG.WATCHDOG_MS){
+            // send() завис (>3с) — освобождаем и считаем сбой
+            S.busy=false;
+            S.wdFails++;
+            log('err',`Watchdog: FaceMesh не отвечает (${S.wdFails}/3)`);
+            if(S.wdFails>=3){S.wdFails=0;recoverFaceMesh();}
+        }else if(!S.busy&&S.lastResAt&&ts-S.lastResAt>CFG.WATCHDOG_MS*2){
+            // кадры уходят, результаты не приходят — re-init
+            S.lastResAt=ts;
+            recoverFaceMesh();
         }
+    }else if(newFrame&&S.recovering===false){
+        processBasicFrame(video,ts,frameT);
     }
-
-    // Следующий кадр
-    loopId=requestAnimationFrame(()=>mainLoop());
 }
 
 // ================================================================
-//  CALLBACK MEDIAPIPE — вызывается после send()
+//  CALLBACK MEDIAPIPE — обёрнут в try/catch: исключение в отрисовке
+//  или анализе больше не роняет конвейер кадров
 // ================================================================
 function onFaceResults(results){
     if(!S.running) return;
+    S.lastResAt=performance.now();
+    try{ handleFaceResults(results); }
+    catch(e){ log('err','кадр: '+(e&&e.message||e)); }
+}
 
+function handleFaceResults(results){
     const ts=performance.now();
     const canvas=document.getElementById('drawCanvas');
     const ctx=canvas.getContext('2d');
@@ -502,13 +574,11 @@ function onFaceResults(results){
     const vw=video.videoWidth||640,vh=video.videoHeight||480;
 
     if(!results.multiFaceLandmarks?.length){
-        // ── НЕТ ЛИЦА ────────────────────────────────────────────
         S.faceOk=false;
         S.noFaceFrames++;
         S.faceFrames=0;
         setD('dFace','✗','r');
 
-        // Рисуем подсказку
         ctx.fillStyle='rgba(255,80,0,0.06)';ctx.fillRect(0,0,W,H);
         ctx.fillStyle='#ff6600';ctx.font='bold 13px Courier New';
         ctx.textAlign='center';
@@ -517,17 +587,11 @@ function onFaceResults(results){
         ctx.fillText('смотрите прямо в камеру',W/2,H/2+10);
         ctx.textAlign='left';
 
-        // НЕ трогаем validStreak и isValid здесь
-        // Они обрабатываются в analyze() через failStreak
-        if(!S.isValid&&!S.calibDone){
-            // во время калибровки просто показываем подсказку
-        }else if(!S.isValid){
-            setBanner('sb-noface','лицо не найдено');
-        }
+        if(!S.isValid&&!S.calibDone){/* подсказка уже на экране */}
+        else if(!S.isValid) setBanner('sb-noface','лицо не найдено');
         return;
     }
 
-    // ── ЛИЦО НАЙДЕНО ────────────────────────────────────────────
     S.faceOk=true;
     S.faceFrames++;
     S.noFaceFrames=0;
@@ -535,33 +599,66 @@ function onFaceResults(results){
 
     const lm=results.multiFaceLandmarks[0];
 
-    // Захват пикселей из трёх зон
+    // ── Рамка лица + подсказки по дистанции ──────────────────
+    const fb=faceBox(lm,vw,vh);
+    S.faceHint='';
+    const clipped = fb.x<=vw*0.01||fb.y<=vh*0.01||
+                    fb.x+fb.w>=vw*0.99||fb.y+fb.h>=vh*0.99;
+    const tooSmall = fb.w < vw*CFG.FACE_MIN;
+    if(clipped)      S.faceHint='лицо не целиком в кадре — отодвиньте камеру';
+    else if(tooSmall)S.faceHint='лицо слишком мелкое — придвиньте камеру';
+
+    if(!S.isValid&&S.faceHint){
+        ctx.fillStyle='#ffcc00';ctx.font='bold 11px Courier New';
+        ctx.textAlign='center';
+        ctx.fillText(S.faceHint,W/2,14);
+        ctx.textAlign='left';
+    }
+
+    // ── Захват пикселей ─────────────────────────────────────
     S.hc.width=vw;S.hc.height=vh;
     S.hctx.drawImage(video,0,0,vw,vh);
 
-    const rF=roiRGB(lm,FOREHEAD,vw,vh);
-    const rL=roiRGB(lm,L_CHEEK, vw,vh);
-    const rR=roiRGB(lm,R_CHEEK, vw,vh);
+    // Зоны: бокс по лендмаркам + небольшой запас, с клампом в кадр
+    const bF=zoneBox(lm,FOREHEAD,vw,vh,0.10);
+    const bL=zoneBox(lm,L_CHEEK, vw,vh,0.15);
+    const bR=zoneBox(lm,R_CHEEK, vw,vh,0.15);
 
-    // Взвешенное среднее: лоб x2, щёки x1 каждая
-    const r=(rF.r*2+rL.r+rR.r)/4;
-    const g=(rF.g*2+rL.g+rR.g)/4;
-    const b=(rF.b*2+rL.b+rR.b)/4;
+    // Лоб применим только если он целиком в кадре и достаточно велик
+    const fhClipped = bF.y<=1 || bF.x<=1 || bF.x+bF.w>=vw-1;
+    const fhTiny    = bF.h < vh*0.035;
+    S.foreheadOk = !fhClipped && !fhTiny;
 
-    // Добавляем в буфер
-    S.sigR.push(r);S.sigG.push(g);S.sigB.push(b);S.times.push(ts);
-    const maxBuf=Math.round((S.fps||30)*CFG.BUF_SEC);
-    if(S.sigR.length>maxBuf){
+    let rF,gF,bFv;
+    if(S.foreheadOk){
+        ({r:rF,g:gF,b:bFv}=avgRGB(S.hctx,bF));
+    }
+
+    const rL=avgRGB(S.hctx,bL);
+    const rR=avgRGB(S.hctx,bR);
+
+    // Взвешенное среднее: лоб ×2 (если доступен), щёки ×1
+    let r,g,b,wSum;
+    if(S.foreheadOk){
+        r=(rF.r*2+rL.r+rR.r)/4; g=(rF.g*2+rL.g+rR.g)/4; b=(rF.b*2+rL.b+rR.b)/4;
+    }else{
+        r=(rL.r+rR.r)/2; g=(rL.g+rR.g)/2; b=(rL.b+rR.b)/2;
+    }
+
+    // Метка времени = video.currentTime отправленного кадра (мс)
+    S.sigR.push(r);S.sigG.push(g);S.sigB.push(b);
+    S.times.push(Math.round(S.lastSentTime*1000));
+    while(S.times.length>2&&S.times[S.times.length-1]-S.times[0]>CFG.BUF_SEC*1000+500){
         S.sigR.shift();S.sigG.shift();S.sigB.shift();S.times.shift();
     }
 
-    // Рисуем зоны
-    drawZones(ctx,lm,vw,vh,W,H);
+    drawZones(ctx,lm,vw,vh,W,H,bF,bL,bR);
 
     S.frameN++;
 
-    // Анализ каждые 15 кадров (реже = стабильнее на слабых устройствах)
-    if(S.calibDone && S.frameN%15===0){
+    // Анализ по РЕАЛЬНОМУ времени, не по номеру кадра
+    if(S.calibDone&&ts-S.lastAnalyze>CFG.ANALYZE_MS&&S.faceOk){
+        S.lastAnalyze=ts;
         analyze();
     }
 
@@ -569,9 +666,9 @@ function onFaceResults(results){
 }
 
 // ================================================================
-//  БАЗОВЫЙ РЕЖИМ (без MediaPipe)
+//  БАЗОВЫЙ РЕЖИМ (без MediaPipe) — статичная зона
 // ================================================================
-function processBasicFrame(video,ts){
+function processBasicFrame(video,ts,frameT){
     const vw=video.videoWidth||320,vh=video.videoHeight||240;
     S.hc.width=vw;S.hc.height=vh;
     S.hctx.drawImage(video,0,0,vw,vh);
@@ -582,9 +679,9 @@ function processBasicFrame(video,ts){
     };
     const{r,g,b}=avgRGB(S.hctx,roi);
 
-    S.sigR.push(r);S.sigG.push(g);S.sigB.push(b);S.times.push(ts);
-    const maxBuf=Math.round((S.fps||30)*CFG.BUF_SEC);
-    if(S.sigR.length>maxBuf){
+    S.sigR.push(r);S.sigG.push(g);S.sigB.push(b);
+    S.times.push(Math.round(frameT*1000));
+    while(S.times.length>2&&S.times[S.times.length-1]-S.times[0]>CFG.BUF_SEC*1000+500){
         S.sigR.shift();S.sigG.shift();S.sigB.shift();S.times.shift();
     }
 
@@ -592,28 +689,32 @@ function processBasicFrame(video,ts){
     S.faceOk=true;
     S.frameN++;
 
-    // Overlay
     const ov=document.getElementById('drawCanvas');
     const octx=ov.getContext('2d');
     const W=ov.offsetWidth||360,H=ov.offsetHeight||220;
     ov.width=W;ov.height=H;octx.clearRect(0,0,W,H);
-    const sx=W/vw,sy=H/vh;
+    const sx=W/vw, sy=H/vh;
+    let dx=roi.x*sx, dw=roi.w*sx, dy=roi.y*sy, dh=roi.h*sy;
+    if(S.mirror) dx=W-dx-dw;
     const col=S.isValid?'#00ff88':'#ff9900';
     octx.strokeStyle=col;octx.lineWidth=2;
     octx.shadowColor=col;octx.shadowBlur=8;
-    octx.strokeRect(roi.x*sx,roi.y*sy,roi.w*sx,roi.h*sy);
+    octx.strokeRect(dx,dy,dw,dh);
     octx.shadowBlur=0;
     octx.fillStyle=col;octx.font='bold 10px Courier New';
     octx.textAlign='center';
-    octx.fillText('ЛОБ',(roi.x+roi.w/2)*sx,roi.y*sy-3);
+    octx.fillText('ЗОНА',dx+dw/2,dy-3);
     octx.textAlign='left';
 
-    if(S.calibDone&&S.frameN%15===0) analyze();
+    if(S.calibDone&&ts-S.lastAnalyze>CFG.ANALYZE_MS){
+        S.lastAnalyze=ts;
+        analyze();
+    }
     redrawCharts();
 }
 
 // ================================================================
-//  КАЛИБРОВКА — по реальному времени, не по кадрам
+//  КАЛИБРОВКА — по реальному времени
 // ================================================================
 function updateCalib(ts){
     const elapsed=(ts-S.calibStart)/1000;
@@ -629,7 +730,6 @@ function updateCalib(ts){
             log('ok','Калибровка завершена');
             setBanner('sb-calib','анализирую...');
         }else{
-            // Обновляем только если нет более важного статуса
             if(!S.isValid){
                 const faceStatus=S.faceOk?'лицо найдено':'ищу лицо...';
                 setBanner('sb-calib',`калибровка ${pct}% — ${faceStatus}`);
@@ -639,9 +739,9 @@ function updateCalib(ts){
 }
 
 // ================================================================
-//  ROI из точек MediaPipe
+//  ГЕОМЕТРИЯ ЗОН
 // ================================================================
-function roiRGB(lm,ids,vw,vh){
+function zoneBox(lm,ids,vw,vh,padFrac){
     let x0=vw,y0=vh,x1=0,y1=0;
     ids.forEach(id=>{
         const p=lm[id];if(!p)return;
@@ -649,12 +749,23 @@ function roiRGB(lm,ids,vw,vh){
         if(px<x0)x0=px;if(px>x1)x1=px;
         if(py<y0)y0=py;if(py>y1)y1=py;
     });
-    return avgRGB(S.hctx,{
-        x:Math.max(0,Math.floor(x0)),
-        y:Math.max(0,Math.floor(y0)),
-        w:Math.max(1,Math.floor(x1-x0)),
-        h:Math.max(1,Math.floor(y1-y0)),
-    });
+    const padX=(x1-x0)*padFrac,padY=(y1-y0)*padFrac;
+    x0-=padX;y0-=padY;x1+=padX;y1+=padY;
+    const cx0=Math.max(0,Math.floor(x0)),cy0=Math.max(0,Math.floor(y0));
+    const cx1=Math.min(vw-1,Math.ceil(x1)),cy1=Math.min(vh-1,Math.ceil(y1));
+    return{x:cx0,y:cy0,w:Math.max(1,cx1-cx0),h:Math.max(1,cy1-cy0)};
+}
+
+function faceBox(lm,vw,vh){
+    let x0=1,y0=1,x1=0,y1=0;
+    const step=4; // каждая 4-я точка — точности достаточно
+    for(let i=0;i<lm.length;i+=step){
+        const p=lm[i];
+        const px=p.x*vw,py=p.y*vh;
+        if(px<x0)x0=px;if(px>x1)x1=px;
+        if(py<y0)y0=py;if(py>y1)y1=py;
+    }
+    return{x:x0,y:y0,w:x1-x0,h:y1-y0};
 }
 
 function avgRGB(ctx,roi){
@@ -668,44 +779,37 @@ function avgRGB(ctx,roi){
 }
 
 // ================================================================
-//  OVERLAY
+//  OVERLAY — с учётом зеркалирования превью
 // ================================================================
-function drawZones(ctx,lm,vw,vh,W,H){
-    // Точки лица — мелкие, не мешают
+function mX(x,W,wd){ return S.mirror ? W-x-wd : x; }
+
+function drawZones(ctx,lm,vw,vh,W,H,bF,bL,bR){
     ctx.fillStyle='rgba(255,255,255,0.12)';
     lm.forEach(p=>{
+        const px=S.mirror?W-p.x*W:p.x*W;
         ctx.beginPath();
-        ctx.arc(p.x*W,p.y*H,1,0,Math.PI*2);
+        ctx.arc(px,p.y*H,1,0,Math.PI*2);
         ctx.fill();
     });
 
-    const drawZ=(ids,color,label)=>{
-        let x0=vw,y0=vh,x1=0,y1=0;
-        ids.forEach(id=>{
-            const p=lm[id];if(!p)return;
-            const px=p.x*vw,py=p.y*vh;
-            if(px<x0)x0=px;if(px>x1)x1=px;
-            if(py<y0)y0=py;if(py>y1)y1=py;
-        });
-        const sx=W/vw,sy=H/vh;
-        const rx=x0*sx,ry=y0*sy,rw=(x1-x0)*sx,rh=(y1-y0)*sy;
+    const sx=W/vw,sy=H/vh;
+    const drawB=(box,color,label)=>{
+        let rx=box.x*sx,ry=box.y*sy,rw=box.w*sx,rh=box.h*sy;
         if(rw<4||rh<4)return;
-
+        if(S.mirror)rx=W-rx-rw;
         ctx.strokeStyle=color;ctx.lineWidth=2;
         ctx.shadowColor=color;ctx.shadowBlur=10;
         ctx.strokeRect(rx,ry,rw,rh);ctx.shadowBlur=0;
-
         ctx.globalAlpha=0.08;ctx.fillStyle=color;
         ctx.fillRect(rx,ry,rw,rh);ctx.globalAlpha=1;
-
         ctx.fillStyle=color;ctx.font='bold 10px Courier New';
         ctx.fillText(label,rx+2,ry-3);
     };
 
-    const col=S.isValid?'#00ff88':'#ff9900';
-    drawZ(FOREHEAD,col,'ЛОБ');
-    drawZ(L_CHEEK,'#4488ff','Щ.Л');
-    drawZ(R_CHEEK,'#4488ff','Щ.П');
+    drawB(bF,S.foreheadOk?(S.isValid?'#00ff88':'#ff9900'):'#666666',
+           S.foreheadOk?'ЛОБ':'ЛОБ✗');
+    drawB(bL,'#4488ff','Щ.Л');
+    drawB(bR,'#4488ff','Щ.П');
 }
 
 // ================================================================
@@ -715,33 +819,66 @@ function analyze(){
     const N=S.sigR.length;
     if(N<60)return;
 
-    const dt=S.times[N-1]-S.times[0];
-    const fps=(N-1)/(dt/1000);
-    if(fps<8)return;
+    const span=(S.times[N-1]-S.times[0])/1000;
+    if(span<4)return;
+    const fs=(N-1)/span;
+    if(fs<8)return;
 
-    // CHROM
-    const chrom=computeCHROM(S.sigR,S.sigG,S.sigB);
-    S.chromSig=chrom;
+    // ── Канонический CHROM (De Haan & Jeanne 2013) ──────────
+    // нормировка каналов на среднее по буферу
+    const mR=mean(S.sigR)||1,mG=mean(S.sigG)||1,mB=mean(S.sigB)||1;
+    const Xn=S.sigR.map((v,i)=>3*v/mR-2*S.sigG[i]/mG);
+    const Yn=S.sigR.map((v,i)=>1.5*v/mR+S.sigG[i]/mG-1.5*S.sigB[i]/mB);
 
-    // Detrend + Butterworth
-    const bp=butterBP(
-        detrend(chrom,Math.round(fps*3)),
-        fps,CFG.BP_LO,CFG.BP_HI
-    );
-    S.filtered=bp;
+    // полоса пульса — до объединения (как в статье)
+    const Xf=butterBP(detrend(Xn,Math.round(fs*3)),fs,CFG.BP_LO,CFG.BP_HI);
+    const Yf=butterBP(detrend(Yn,Math.round(fs*3)),fs,CFG.BP_LO,CFG.BP_HI);
+    const sX=stdDev(Xf),sY=stdDev(Yf),alpha=sY>0?sX/sY:1;
+    const pulse=Xf.map((v,i)=>v-alpha*Yf);
 
-    // Амплитуда
-    const amp=stdDev(bp.slice(-Math.round(fps*8)));
+    S.chromSig=Xn.map((v,i)=>v-alpha*Yn);
+    S.filtered=pulse;
+
+    // ── Шум вне пульсовой полосы → адаптивный порог ─────────
+    const noiseSig=butterBP(detrend(S.chromSig,Math.round(fs*3)),fs,CFG.NOISE_LO,CFG.NOISE_HI);
+    S.noise=stdDev(noiseSig.slice(Math.round(fs*2)));
+    S.ampThr=Math.min(CFG.AMP_MAX,Math.max(CFG.MIN_AMP,CFG.NOISE_K*S.noise));
+
+    // Амплитуда: последние ~8с
+    const tail=Math.min(pulse.length,Math.round(fs*8));
+    const amp=stdDev(pulse.slice(-tail));
     S.amplitude=amp;
-    setD('dAmp',amp.toFixed(4),amp>=CFG.MIN_AMP?'g':amp>=CFG.MIN_AMP*0.5?'y':'r');
+    setD('dAmp',amp.toFixed(4),amp>=S.ampThr?'g':amp>=S.ampThr*0.5?'y':'r');
 
-    if(amp<CFG.MIN_AMP){
-        onAnalysisFail(`слабый сигнал A:${amp.toFixed(4)}`);
+    if(amp<S.ampThr){
+        onAnalysisFail(`слабый сигнал A:${amp.toFixed(4)}/${S.ampThr.toFixed(4)}`);
         return;
     }
 
-    // Пики
-    const peaks=findPeaks(bp,Math.round(fps*CFG.PEAK_MIN_SEC));
+    // Пики. Рефрактерный интервал — по доминирующему периоду сигнала
+    // (автокорреляция): это убивает двойной счёт от дикротической волны
+    // (главная причина «пульс 70 вместо 50» в v7)
+    const lag=dominantPeriod(pulse,fs);
+    if(lag>0){
+        const hrAc=60*fs/lag;
+        const refr=Math.max(CFG.PEAK_MIN_SEC,0.65*lag/fs);
+        var peaks=findPeaks(pulse,Math.round(fs*refr));
+        // перекрёстная проверка: пик-подсчёт vs автокорреляция (±15%)
+        const rrChk=[];
+        for(let i=1;i<peaks.length;i++){
+            const ms=S.times[peaks[i]]-S.times[peaks[i-1]];
+            if(ms>=CFG.RR_MIN&&ms<=CFG.RR_MAX)rrChk.push(ms);
+        }
+        if(rrChk.length>=3){
+            const hrPk=60000/(rrChk.reduce((a,b)=>a+b,0)/rrChk.length);
+            if(Math.abs(hrPk-hrAc)>0.15*hrAc){
+                onAnalysisFail(`нестабильно: ${Math.round(hrPk)} vs ${Math.round(hrAc)} (автокорр.)`);
+                return;
+            }
+        }
+    }else{
+        var peaks=findPeaks(pulse,Math.round(fs*CFG.PEAK_MIN_SEC));
+    }
     S.peaks=peaks;
     setD('dPeaks',peaks.length,peaks.length>=CFG.MIN_PEAKS?'g':peaks.length>=2?'y':'r');
 
@@ -750,18 +887,30 @@ function analyze(){
         return;
     }
 
-    // R-R интервалы
-    const rr=[];
+    // R-R по РЕАЛЬНЫМ временам пиков (video.currentTime)
+    const rrAll=[];
     for(let i=1;i<peaks.length;i++){
-        const ms=((peaks[i]-peaks[i-1])/fps)*1000;
-        if(ms>=CFG.RR_MIN&&ms<=CFG.RR_MAX)rr.push(ms);
+        const ms=S.times[peaks[i]]-S.times[peaks[i-1]];
+        if(ms>=CFG.RR_MIN&&ms<=CFG.RR_MAX)rrAll.push(ms);
     }
-    if(rr.length<2){
+    if(rrAll.length<3){
         onAnalysisFail('R-R вне диапазона');
         return;
     }
 
-    // Коэффициент вариации
+    // Медианная фильтрация выбросов (>25% от медианы) + привязка
+    // к автокорреляционному периоду (отсекает удвоения/пропуски ударов)
+    const med=median(rrAll);
+    let rr=rrAll.filter(v=>Math.abs(v-med)<=CFG.RR_OUT*med);
+    if(lag>0){
+        const exp=60000/(60*fs/lag);   // ожидаемый R-R по автокорреляции
+        rr=rr.filter(v=>Math.abs(v-exp)<=0.22*exp);
+    }
+    if(rr.length<3){
+        onAnalysisFail('R-R нерегулярны (выбросы)');
+        return;
+    }
+
     const rrMean=rr.reduce((a,b)=>a+b,0)/rr.length;
     const cv=stdDev(rr)/rrMean;
     S.rrCV=cv;
@@ -772,7 +921,7 @@ function analyze(){
         return;
     }
 
-    // ── УСПЕХ ───────────────────────────────────────────────────
+    // ── УСПЕХ ────────────────────────────────────────────────
     S.failStreak=0;
     S.rrClean=rr;
     S.validStreak++;
@@ -801,15 +950,12 @@ function analyze(){
     }
 }
 
-// Провал анализа — НЕ сразу сбрасываем, накапливаем failStreak
 function onAnalysisFail(reason){
     S.failStreak++;
 
-    // Показываем причину
     document.getElementById('hrSub').textContent=reason;
 
     if(S.failStreak>=CFG.FAIL_TOLERANCE){
-        // Только после N подряд провалов — сбрасываем
         const wasValid=S.isValid;
         S.isValid=false;
         S.validStreak=0;
@@ -821,7 +967,6 @@ function onAnalysisFail(reason){
         }
         setBanner('sb-weak',reason);
     }else{
-        // Ещё есть запас — не сбрасываем validStreak
         if(S.isValid){
             setBanner('sb-valid',`❤ ${S.hr} уд/мин (нестаб.)`);
         }else if(S.validStreak>0){
@@ -833,7 +978,7 @@ function onAnalysisFail(reason){
 
 // ================================================================
 //  DSP
-// ================================================================
+// =================================================================
 function computeCHROM(R,G,B){
     const n=R.length,X=[],Y=[];
     for(let i=0;i<n;i++){
@@ -844,7 +989,7 @@ function computeCHROM(R,G,B){
     const sX=stdDev(X),sY=stdDev(Y),a=sY>0?sX/sY:1;
     return X.map((x,i)=>x-a*Y[i]);
 }
-
+function mean(a){return a.reduce((s,v)=>s+v,0)/a.length;}
 function detrend(sig,win){
     const h=Math.floor(win/2);
     return sig.map((v,i)=>{
@@ -853,7 +998,6 @@ function detrend(sig,win){
         return v-s/(hi-lo+1);
     });
 }
-
 function butterBP(sig,fs,f1,f2){
     return butter2LP(butter2HP(sig,fs,f1),fs,f2);
 }
@@ -890,6 +1034,32 @@ function findPeaks(sig,minDist){
         }
     }
     return peaks;
+}
+
+// Доминирующий период сигнала (автокорреляция), в СЕМПЛАХ.
+// 0 — не найден. Устойчив к дикротическим вкладам и пропуску удара.
+// Анти-субгармоника: берём ПЕРВЫЙ лаг с autocorr ≥ 95% максимума
+// (иначе чистый периодический сигнал даёт период 2T → «пульс вдвое ниже»)
+function dominantPeriod(sig,fs){
+    const n=sig.length;
+    const minLag=Math.max(2,Math.round(fs*CFG.PEAK_MIN_SEC));   // ≤180 уд/мин
+    const maxLag=Math.min(Math.round(fs*1.5),Math.floor(n/2));  // ≥40 уд/мин
+    if(maxLag<=minLag)return 0;
+    const m=mean(sig);
+    let norm=0;
+    for(let i=0;i<n;i++)norm+=(sig[i]-m)*(sig[i]-m);
+    if(norm<=0)return 0;
+    const ac=new Array(maxLag+1).fill(0);
+    let best=-Infinity;
+    for(let lag=minLag;lag<=maxLag;lag++){
+        let s=0,c=0;
+        for(let i=lag;i<n;i++){s+=(sig[i]-m)*(sig[i-lag]-m);c++;}
+        if(c>0){s/=c;ac[lag]=s;if(s>best)best=s;}
+    }
+    if(best<0.25*norm/n)return 0;   // периодичность слишком слабая
+    for(let lag=minLag;lag<=maxLag;lag++)
+        if(ac[lag]>=0.95*best)return lag;
+    return 0;
 }
 
 function calcRMSSD(rr){
@@ -974,8 +1144,8 @@ function log(type,msg){
     const box=document.getElementById('logBox');
     const row=document.createElement('div');
     row.className='lr';
-    row.innerHTML=`<span class="lrt">${new Date().toTimeString().slice(0,8)}</span>
-        <span class="lrm ${type}">${msg}</span>`;
+    row.innerHTML=`<span class="lrt">${new Date().toTimeString().slice(0,8)}</span>`+
+        `<span class="lrm ${type}">${msg}</span>`;
     box.insertBefore(row,box.firstChild);
     if(logN>50)box.removeChild(box.lastChild);
 }
@@ -1021,7 +1191,7 @@ function plotFilt(){
             }
         });
     }
-    document.getElementById('lFilt').textContent=`A:${S.amplitude.toFixed(4)}`;
+    document.getElementById('lFilt').textContent=`A:${S.amplitude.toFixed(4)} порог:${S.ampThr.toFixed(4)}`;
 }
 
 function plotHR(){
@@ -1113,5 +1283,5 @@ function grd(ctx,W,H){
 
 window.addEventListener('resize',redrawCharts);
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2fa8dc20ee7e951',t:'MTc4NzQ5MjY4NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
