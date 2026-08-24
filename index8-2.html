@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>rPPG Осциллограф v8.2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:6px;overflow-x:hidden}
+h1{font-size:1.1rem;color:#38bdf8}
+.sub{font-size:.65rem;color:#6b7280;margin-bottom:6px;text-align:center}
+
+.cam-block{position:relative;width:340px;height:200px;background:#000;border-radius:8px;overflow:hidden;border:2px solid #1e293b}
+video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+
+/* Панель управления */
+.panel{width:100%;max-width:700px;background:#111827;border:1px solid #1e293b;border-radius:8px;padding:8px 10px;margin-top:6px}
+.panel-title{font-size:.7rem;color:#9ca3af;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.panel-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.panel-row:last-child{margin-bottom:0}
+
+label{font-size:.72rem;display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none}
+input[type=checkbox]{accent-color:#38bdf8;width:14px;height:14px}
+input[type=range]{width:80px;height:4px;accent-color:#38bdf8}
+select{background:#1e293b;color:#d1d5db;border:1px solid #374151;border-radius:4px;padding:2px 6px;font-size:.7rem}
+.val{font-size:.65rem;color:#6b7280;min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* Осциллограф */
+.scope{width:100%;max-width:700px;margin-top:6px;position:relative}
+canvas#scopeCanvas{width:100%;height:260px;background:#0a0f1a;border:1px solid #1e293b;border-radius:6px;display:block}
+
+.scope-info{display:flex;justify-content:space-between;font-size:.6rem;color:#555;margin-top:2px;padding:0 4px}
+
+/* Статус */
+.status{width:100%;max-width:700px;background:#111827;border:1px solid #1e293b;border-radius:6px;padding:5px 10px;margin-top:4px;font-size:.7rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+
+.ctr{margin-top:6px;display:flex;gap:8px}
+button{background:#0284c7;color:#fff;border:none;padding:7px 16px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.78rem}
+button.off{background:#dc2626}
+button.sm{padding:5px 10px;font-size:.7rem;background:#374151}
+button.sm:hover{background:#4b5563}
+</style>
+</head>
+<body>
+<h1>🔬 rPPG Осциллограф v8.2</h1>
+<div class="sub">Сырые каналы R/G/B · Ручной анализ · Dual-ROI</div>
+
+<div class="cam-block">
+ <video id="vid" autoplay playsinline muted></video>
+ <canvas id="ov" width="340" height="200"></canvas>
+</div>
+
+<!-- Каналы -->
+<div class="panel">
+ <div class="panel-title">📺 Каналы</div>
+ <div class="panel-row">
+  <label style="color:#ff6b6b"><input type="checkbox" id="chR"> Красный (R)</label>
+  <label style="color:#4ade80"><input type="checkbox" id="chG" checked> Зелёный (G)</label>
+  <label style="color:#60a5fa"><input type="checkbox" id="chB"> Синий (B)</label>
+  <label style="color:#c084fc"><input type="checkbox" id="chCombo"> G−R/2 (комби)</label>
+ </div>
+ <div class="panel-row">
+  <label><input type="checkbox" id="chDualROI" checked> Dual-ROI (÷фон)</label>
+  <label><input type="checkbox" id="chShowBG"> Показать фон</label>
+ </div>
+</div>
+
+<!-- Обработка -->
+<div class="panel">
+ <div class="panel-title">🔧 Обработка сигнала</div>
+ <div class="panel-row">
+  <label>Детренд:
+   <select id="selDetrend">
+    <option value="none">Нет</option>
+    <option value="mean" selected>Среднее=0</option>
+    <option value="linear">Линейный</option>
+    <option value="hp">ВЧ фильтр</option>
+   </select>
+  </label>
+  <label>Сглаживание:
+   <input type="range" id="slSmooth" min="1" max="30" value="1">
+   <span class="val" id="vSmooth">1</span>
+  </label>
+ </div>
+ <div class="panel-row">
+  <label>ВЧ фильтр (Гц):
+   <input type="range" id="slHP" min="0" max="200" value="50">
+   <span class="val" id="vHP">0.50</span>
+  </label>
+  <label>НЧ фильтр (Гц):
+   <input type="range" id="slLP" min="100" max="1500" value="500">
+   <span class="val" id="vLP">5.00</span>
+  </label>
+  <label><input type="checkbox" id="chBP"> Применить</label>
+ </div>
+</div>
+
+<!-- Масштаб -->
+<div class="panel">
+ <div class="panel-title">📐 Масштаб и отображение</div>
+ <div class="panel-row">
+  <label>Масштаб Y:
+   <input type="range" id="slScale" min="1" max="500" value="100">
+   <span class="val" id="vScale">×1.0</span>
+  </label>
+  <label><input type="checkbox" id="chAutoY" checked> Авто Y</label>
+  <label>Скорость:
+   <input type="range" id="slSpeed" min="2" max="20" value="8">
+   <span class="val" id="vSpeed">8 сек</span>
+  </label>
+ </div>
+ <div class="panel-row">
+  <label><input type="checkbox" id="chGrid"> Сетка</label>
+  <label><input type="checkbox" id="chZeroLine" checked> Нулевая линия</label>
+  <label><input type="checkbox" id="chValues"> Значения Y</label>
+  <button class="sm" id="bFreeze">⏸ Пауза</button>
+  <button class="sm" id="bClear">🗑 Очистить</button>
+ </div>
+</div>
+
+<!-- ROI -->
+<div class="panel">
+ <div class="panel-title">📍 Область измерения (ROI)</div>
+ <div class="panel-row">
+  <label>X:
+   <input type="range" id="slRoiX" min="0" max="80" value="22">
+   <span class="val" id="vRoiX">22%</span>
+  </label>
+  <label>Y:
+   <input type="range" id="slRoiY" min="0" max="80" value="10">
+   <span class="val" id="vRoiY">10%</span>
+  </label>
+  <label>W:
+   <input type="range" id="slRoiW" min="10" max="80" value="56">
+   <span class="val" id="vRoiW">56%</span>
+  </label>
+  <label>H:
+   <input type="range" id="slRoiH" min="10" max="80" value="50">
+   <span class="val" id="vRoiH">50%</span>
+  </label>
+ </div>
+</div>
+
+<!-- Осциллограф -->
+<div class="scope">
+ <canvas id="scopeCanvas"></canvas>
+ <div class="scope-info">
+  <span id="siLeft">--</span>
+  <span id="siCenter">--</span>
+  <span id="siRight">--</span>
+ </div>
+</div>
+
+<!-- Статус -->
+<div class="status">
+ <span id="stFPS">FPS: --</span>
+ <span id="stSamples">Буфер: 0</span>
+ <span id="stSkin">Кожа: --</span>
+ <span id="stRaw">R:-- G:-- B:--</span>
+</div>
+
+<div class="ctr">
+ <button id="bOn">▶ Старт</button>
+ <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
+</div>
+
+<script>
+// =========================================================================
+//  СОСТОЯНИЕ
+// =========================================================================
+const CW=340, CH=200;
+let on=false, stm=null, raf=null, frozen=false;
+let bufR=[], bufG=[], bufB=[];
+let bufBgR=[], bufBgG=[], bufBgB=[];
+let bufT=[];
+let fc=0, ft0=0, fps=25;
+const MAX_BUF=3000; // ~100 сек при 30fps
+
+// IIR для ВЧ/НЧ фильтров (один на канал)
+let iirStatesHP={r:{x1:0,x2:0,y1:0,y2:0},g:{x1:0,x2:0,y1:0,y2:0},b:{x1:0,x2:0,y1:0,y2:0}};
+let iirStatesLP={r:{x1:0,x2:0,y1:0,y2:0},g:{x1:0,x2:0,y1:0,y2:0},b:{x1:0,x2:0,y1:0,y2:0}};
+
+// DOM
+const vid=document.getElementById('vid');
+const ov=document.getElementById('ov');
+const co=ov.getContext('2d');
+const scopeCanvas=document.getElementById('scopeCanvas');
+const ctx=scopeCanvas.getContext('2d');
+const bOn=document.getElementById('bOn'),bOff=document.getElementById('bOff');
+
+// Checkboxes
+const chR=document.getElementById('chR'),chG=document.getElementById('chG'),chB=document.getElementById('chB');
+const chCombo=document.getElementById('chCombo');
+const chDualROI=document.getElementById('chDualROI'),chShowBG=document.getElementById('chShowBG');
+const chBP=document.getElementById('chBP');
+const chAutoY=document.getElementById('chAutoY'),chGrid=document.getElementById('chGrid');
+const chZeroLine=document.getElementById('chZeroLine'),chValues=document.getElementById('chValues');
+
+// Sliders
+const slSmooth=document.getElementById('slSmooth'),vSmooth=document.getElementById('vSmooth');
+const slHP=document.getElementById('slHP'),vHP=document.getElementById('vHP');
+const slLP=document.getElementById('slLP'),vLP=document.getElementById('vLP');
+const slScale=document.getElementById('slScale'),vScale=document.getElementById('vScale');
+const slSpeed=document.getElementById('slSpeed'),vSpeed=document.getElementById('vSpeed');
+const slRoiX=document.getElementById('slRoiX'),vRoiX=document.getElementById('vRoiX');
+const slRoiY=document.getElementById('slRoiY'),vRoiY=document.getElementById('vRoiY');
+const slRoiW=document.getElementById('slRoiW'),vRoiW=document.getElementById('vRoiW');
+const slRoiH=document.getElementById('slRoiH'),vRoiH=document.getElementById('vRoiH');
+const selDetrend=document.getElementById('selDetrend');
+
+const stFPS=document.getElementById('stFPS'),stSamples=document.getElementById('stSamples');
+const stSkin=document.getElementById('stSkin'),stRaw=document.getElementById('stRaw');
+const siLeft=document.getElementById('siLeft'),siCenter=document.getElementById('siCenter'),siRight=document.getElementById('siRight');
+
+const BG_ROIS=[
+ {x:.01,y:.01,w:.10,h:.10},{x:.89,y:.01,w:.10,h:.10},
+ {x:.01,y:.89,w:.10,h:.10},{x:.89,y:.89,w:.10,h:.10}
+];
+
+const hc=document.createElement('canvas');hc.width=CW;hc.height=CH;
+const hx=hc.getContext('2d',{willReadFrequently:true});
+
+// Слайдеры — обновление подписей
+slSmooth.oninput=()=>vSmooth.textContent=slSmooth.value;
+slHP.oninput=()=>vHP.textContent=(slHP.value/100).toFixed(2);
+slLP.oninput=()=>vLP.textContent=(slLP.value/100).toFixed(2);
+slScale.oninput=()=>vScale.textContent='×'+(slScale.value/100).toFixed(1);
+slSpeed.oninput=()=>vSpeed.textContent=slSpeed.value+' сек';
+slRoiX.oninput=()=>vRoiX.textContent=slRoiX.value+'%';
+slRoiY.oninput=()=>vRoiY.textContent=slRoiY.value+'%';
+slRoiW.oninput=()=>vRoiW.textContent=slRoiW.value+'%';
+slRoiH.oninput=()=>vRoiH.textContent=slRoiH.value+'%';
+
+document.getElementById('bFreeze').onclick=()=>{frozen=!frozen;document.getElementById('bFreeze').textContent=frozen?'▶ Играть':'⏸ Пауза'};
+document.getElementById('bClear').onclick=()=>{bufR=[];bufG=[];bufB=[];bufBgR=[];bufBgG=[];bufBgB=[];bufT=[]};
+
+bOn.onclick=startApp;
+bOff.onclick=stopApp;
+
+async function startApp(){
+ try{
+  stm=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+  vid.srcObject=stm;await vid.play();
+  bufR=[];bufG=[];bufB=[];bufBgR=[];bufBgG=[];bufBgB=[];bufT=[];
+  on=true;fc=0;ft0=performance.now();
+  bOn.style.display='none';bOff.style.display='';
+  loop();
+ }catch(e){alert('Камера: '+e.message)}
+}
+
+function stopApp(){
+ on=false;
+ setTimeout(()=>{
+  if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
+  vid.srcObject=null;bOn.style.display='';bOff.style.display='none';
+ },100);
+}
+
+// =========================================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// =========================================================================
+function loop(){
+ if(!on)return;
+ try{
+  const now=performance.now();
+  fc++;
+  if(now-ft0>2000){fps=fc/((now-ft0)/1000);fc=0;ft0=now;stFPS.textContent='FPS: '+fps.toFixed(0)}
+
+  hx.drawImage(vid,0,0,CW,CH);
+  const px=hx.getImageData(0,0,CW,CH).data;
+
+  // ROI параметры
+  const roiX=parseInt(slRoiX.value)/100;
+  const roiY=parseInt(slRoiY.value)/100;
+  const roiW=parseInt(slRoiW.value)/100;
+  const roiH=parseInt(slRoiH.value)/100;
+
+  const fx=Math.floor(CW*roiX),fy=Math.floor(CH*roiY);
+  const fw=Math.floor(CW*roiW),fh=Math.floor(CH*roiH);
+
+  // ===== Среднее по ROI =====
+  let sumR=0,sumG=0,sumB=0,cnt=0;
+  for(let y=fy;y<fy+fh;y++){
+   for(let x=fx;x<fx+fw;x++){
+    const i=(y*CW+x)*4;
+    sumR+=px[i];sumG+=px[i+1];sumB+=px[i+2];cnt++;
+   }
+  }
+  const avgR=cnt>0?sumR/cnt:128;
+  const avgG=cnt>0?sumG/cnt:128;
+  const avgB=cnt>0?sumB/cnt:128;
+
+  // ===== Фон (углы) =====
+  let bgSumR=0,bgSumG=0,bgSumB=0,bgN=0;
+  for(const roi of BG_ROIS){
+   const rx=Math.floor(CW*roi.x),ry=Math.floor(CH*roi.y);
+   const rw=Math.floor(CW*roi.w),rh=Math.floor(CH*roi.h);
+   let sr=0,sg=0,sb=0,c=0;
+   for(let y=ry;y<ry+rh;y+=2){
+    for(let x=rx;x<rx+rw;x+=2){
+     const i=(y*CW+x)*4;
+     sr+=px[i];sg+=px[i+1];sb+=px[i+2];c++;
+    }
+   }
+   if(c>0){bgSumR+=sr/c;bgSumG+=sg/c;bgSumB+=sb/c;bgN++}
+  }
+  const bgAvgR=bgN>0?bgSumR/bgN:128;
+  const bgAvgG=bgN>0?bgSumG/bgN:128;
+  const bgAvgB=bgN>0?bgSumB/bgN:128;
+
+  // Сохраняем
+  if(!frozen){
+   bufR.push(avgR);bufG.push(avgG);bufB.push(avgB);
+   bufBgR.push(bgAvgR);bufBgG.push(bgAvgG);bufBgB.push(bgAvgB);
+   bufT.push(now);
+   while(bufR.length>MAX_BUF){bufR.shift();bufG.shift();bufB.shift();bufBgR.shift();bufBgG.shift();bufBgB.shift();bufT.shift()}
+  }
+
+  // Рисуем
+  drawROI(fx,fy,fw,fh);
+  drawScope();
+
+  // Статус
+  stSamples.textContent='Буфер: '+bufR.length;
+  stRaw.textContent=`R:${avgR.toFixed(1)} G:${avgG.toFixed(1)} B:${avgB.toFixed(1)}`;
+
+ }catch(e){console.error(e)}
+ raf=requestAnimationFrame(loop);
+}
+
+// =========================================================================
+//  РИСОВАНИЕ ROI
+// =========================================================================
+function drawROI(fx,fy,fw,fh){
+ co.clearRect(0,0,CW,CH);
+ co.fillStyle='rgba(0,0,0,.3)';
+ co.fillRect(0,0,CW,CH);
+ co.clearRect(fx,fy,fw,fh);
+
+ co.strokeStyle='#22c55e';co.lineWidth=2;
+ co.strokeRect(fx,fy,fw,fh);
+
+ // Угловые маркеры
+ const cn=10;
+ co.lineWidth=3;
+ co.beginPath();co.moveTo(fx,fy+cn);co.lineTo(fx,fy);co.lineTo(fx+cn,fy);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy);co.lineTo(fx+fw,fy);co.lineTo(fx+fw,fy+cn);co.stroke();
+ co.beginPath();co.moveTo(fx,fy+fh-cn);co.lineTo(fx,fy+fh);co.lineTo(fx+cn,fy+fh);co.stroke();
+ co.beginPath();co.moveTo(fx+fw-cn,fy+fh);co.lineTo(fx+fw,fy+fh);co.lineTo(fx+fw,fy+fh-cn);co.stroke();
+
+ // Фон ROI
+ if(chShowBG.checked){
+  co.strokeStyle='rgba(56,189,248,.4)';co.lineWidth=1;co.setLineDash([3,3]);
+  for(const r of BG_ROIS){
+   co.strokeRect(Math.floor(CW*r.x),Math.floor(CH*r.y),Math.floor(CW*r.w),Math.floor(CH*r.h));
+  }
+  co.setLineDash([]);
+ }
+
+ co.fillStyle='#22c55e';co.font='9px sans-serif';
+ co.fillText('ROI',fx+3,fy-3);
+}
+
+// =========================================================================
+//  ОСЦИЛЛОГРАФ
+// =========================================================================
+function drawScope(){
+ const w=scopeCanvas.width=scopeCanvas.clientWidth*2;
+ const h=scopeCanvas.height=scopeCanvas.clientHeight*2;
+ ctx.clearRect(0,0,w,h);
+ ctx.fillStyle='#0a0f1a';
+ ctx.fillRect(0,0,w,h);
+
+ const N=bufR.length;
+ if(N<3)return;
+
+ const speedSec=parseInt(slSpeed.value);
+ const showN=Math.min(N,Math.floor(fps*speedSec));
+ const smoothW=parseInt(slSmooth.value);
+ const useDual=chDualROI.checked;
+ const useBP=chBP.checked;
+ const detrend=selDetrend.value;
+ const autoY=chAutoY.checked;
+ const manualScale=parseInt(slScale.value)/100;
+
+ // Какие каналы включены
+ const channels=[];
+ if(chR.checked) channels.push({key:'r',color:'#ff6b6b',buf:bufR,bgBuf:bufBgR});
+ if(chG.checked) channels.push({key:'g',color:'#4ade80',buf:bufG,bgBuf:bufBgG});
+ if(chB.checked) channels.push({key:'b',color:'#60a5fa',buf:bufB,bgBuf:bufBgB});
+ if(chCombo.checked) channels.push({key:'combo',color:'#c084fc',buf:null});
+
+ if(channels.length===0){
+  ctx.fillStyle='#4b5563';ctx.font='14px sans-serif';
+  ctx.fillText('Выберите хотя бы один канал',w/2-100,h/2);
+  return;
+ }
+
+ // Подготовка данных для каждого канала
+ const traces=[];
+ for(const ch of channels){
+  let raw;
+  if(ch.key==='combo'){
+   // G - R/2
+   raw=new Float64Array(N);
+   for(let i=0;i<N;i++){
+    let g=bufG[i],r=bufR[i];
+    if(useDual){
+     g=bufBgG[i]>5?g/bufBgG[i]:g/128;
+     r=bufBgR[i]>5?r/bufBgR[i]:r/128;
+    }
+    raw[i]=g-r*0.5;
+   }
+  }else{
+   raw=new Float64Array(N);
+   for(let i=0;i<N;i++){
+    let v=ch.buf[i];
+    if(useDual && ch.bgBuf[i]>5) v=v/ch.bgBuf[i];
+    raw[i]=v;
+   }
+  }
+
+  // Сглаживание
+  let sig=smoothW>1?movAvg(raw,smoothW):raw;
+
+  // Детренд
+  if(detrend==='mean'){
+   let m=0;for(let i=N-showN;i<N;i++)m+=sig[i];m/=showN;
+   const out=new Float64Array(N);
+   for(let i=0;i<N;i++)out[i]=sig[i]-m;
+   sig=out;
+  }else if(detrend==='linear'){
+   sig=linearDetrend(sig,N-showN,N);
+  }else if(detrend==='hp'){
+   // Простой HP: вычитаем длинную скользящую среднюю
+   const hpW=Math.max(3,Math.round(fps/0.3));
+   const trend=movAvg(sig,hpW);
+   const out=new Float64Array(N);
+   for(let i=0;i<N;i++)out[i]=sig[i]-trend[i];
+   sig=out;
+  }
+
+  // Полосовой фильтр (если включён)
+  if(useBP){
+   const hpF=parseInt(slHP.value)/100;
+   const lpF=parseInt(slLP.value)/100;
+   // HP
+   if(hpF>0.05){
+    const hpW=Math.max(3,Math.round(fps/hpF));
+    const trend=movAvg(sig,hpW);
+    const out=new Float64Array(sig.length);
+    for(let i=0;i<sig.length;i++)out[i]=sig[i]-trend[i];
+    sig=out;
+   }
+   // LP
+   if(lpF<fps/2){
+    const lpW=Math.max(3,Math.round(fps/(lpF*2)));
+    sig=movAvg(sig,lpW);
+   }
+  }
+
+  // Берём последние showN точек
+  const slice=sig.slice(N-showN);
+  traces.push({data:slice, color:ch.color, label:ch.key});
+ }
+
+ // ===== Масштаб Y =====
+ const pad={l:50,r:10,t:15,b:15};
+ const pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+
+ let yMin,yMax;
+ if(autoY){
+  yMin=Infinity;yMax=-Infinity;
+  for(const tr of traces){
+   for(const v of tr.data){
+    if(v<yMin)yMin=v;
+    if(v>yMax)yMax=v;
+   }
+  }
+  // Немного отступа
+  const range=yMax-yMin||1;
+  yMin-=range*.05;yMax+=range*.05;
+ }else{
+  // Ручной масштаб: ±диапазон от 0
+  const range=1/manualScale;
+  yMin=-range;yMax=range;
+ }
+
+ const yRange=yMax-yMin||1;
+
+ function toY(v){return pad.t+ph-(v-yMin)/yRange*ph}
+ function toX(i,len){return pad.l+i/(len-1)*pw}
+
+ // ===== Сетка =====
+ if(chGrid.checked){
+  ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+  // Горизонтальные
+  const nGridY=6;
+  for(let i=0;i<=nGridY;i++){
+   const y=pad.t+ph*i/nGridY;
+   ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+pw,y);ctx.stroke();
+  }
+  // Вертикальные (каждую секунду)
+  const pxPerSample=pw/(showN-1);
+  const samplesPerSec=fps;
+  for(let s=0;s<speedSec;s++){
+   const x=pad.l+pw-s*samplesPerSec*pxPerSample;
+   if(x<pad.l)break;
+   ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ph);ctx.stroke();
+  }
+ }
+
+ // ===== Нулевая линия =====
+ if(chZeroLine.checked){
+  const zy=toY(0);
+  if(zy>pad.t&&zy<pad.t+ph){
+   ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+   ctx.beginPath();ctx.moveTo(pad.l,zy);ctx.lineTo(pad.l+pw,zy);ctx.stroke();
+   ctx.setLineDash([]);
+   ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';
+   ctx.fillText('0',pad.l-14,zy+3);
+  }
+ }
+
+ // ===== Подписи Y =====
+ if(chValues.checked){
+  ctx.fillStyle='#6b7280';ctx.font='9px monospace';ctx.textAlign='right';
+  const nTicks=5;
+  for(let i=0;i<=nTicks;i++){
+   const v=yMin+yRange*i/nTicks;
+   const y=toY(v);
+   ctx.fillText(v.toFixed(3),pad.l-4,y+3);
+  }
+  ctx.textAlign='left';
+ }
+
+ // ===== ТРАССЫ =====
+ for(const tr of traces){
+  ctx.beginPath();
+  ctx.strokeStyle=tr.color;
+  ctx.lineWidth=1.5;
+  for(let i=0;i<tr.data.length;i++){
+   const x=toX(i,tr.data.length);
+   const y=toY(tr.data[i]);
+   i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+ }
+
+ // Метки каналов
+ let labelY=20;
+ for(const tr of traces){
+  ctx.fillStyle=tr.color;ctx.font='bold 11px monospace';
+  const last=tr.data[tr.data.length-1];
+  ctx.fillText(`${tr.label.toUpperCase()}: ${last.toFixed(4)}`,pad.l+8,labelY);
+  labelY+=14;
+ }
+
+ // Инфо
+ siLeft.textContent=`${speedSec}с назад`;
+ siCenter.textContent=`${showN} точек · ${fps.toFixed(0)} fps`;
+ siRight.textContent='сейчас →';
+}
+
+// =========================================================================
+//  УТИЛИТЫ
+// =========================================================================
+function movAvg(a,w){
+ const n=a.length,o=new Float64Array(n);
+ if(w<=1){o.set(a);return o}
+ const h=Math.floor(w/2);
+ const cs=new Float64Array(n+1);
+ for(let i=0;i<n;i++)cs[i+1]=cs[i]+a[i];
+ for(let i=0;i<n;i++){
+  const l=Math.max(0,i-h),r=Math.min(n,i+h+1);
+  o[i]=(cs[r]-cs[l])/(r-l);
+ }
+ return o;
+}
+
+function linearDetrend(a,start,end){
+ const o=new Float64Array(a.length);
+ o.set(a);
+ const n=end-start;
+ if(n<3)return o;
+ let sx=0,sy=0,sxy=0,sxx=0;
+ for(let i=start;i<end;i++){
+  const x=i-start;
+  sx+=x;sy+=a[i];sxy+=x*a[i];sxx+=x*x;
+ }
+ const d=n*sxx-sx*sx;
+ if(Math.abs(d)<1e-10)return o;
+ const sl=(n*sxy-sx*sy)/d,ic=(sy-sl*sx)/n;
+ for(let i=start;i<end;i++){
+  o[i]=a[i]-(sl*(i-start)+ic);
+ }
+ return o;
+}
+</script>
+</body>
+</html>
