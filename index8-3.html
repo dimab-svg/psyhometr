@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Стресс-камера v1 — Визуальные маркеры</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:6px;overflow-x:hidden}
+h1{font-size:1.1rem;color:#38bdf8}
+.sub{font-size:.65rem;color:#6b7280;margin-bottom:6px;text-align:center;max-width:360px;line-height:1.3}
+
+.cam-block{position:relative;width:320px;height:240px;background:#000;border-radius:8px;overflow:hidden;border:2px solid #1e293b}
+video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+
+/* Индикатор стресса */
+.stress-indicator{width:320px;margin-top:6px;background:#111827;border:1px solid #1e293b;border-radius:8px;padding:10px;text-align:center}
+.stress-big{font-size:2.8rem;font-weight:900;transition:color .3s}
+.stress-label{font-size:.7rem;color:#9ca3af;margin-top:2px}
+.stress-bar{width:100%;height:10px;background:#1e293b;border-radius:5px;overflow:hidden;margin-top:6px}
+.stress-bar-fill{height:100%;border-radius:5px;transition:width .3s,background .3s;width:0%}
+
+/* Графики */
+.charts{width:100%;max-width:360px;margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.chart-box{background:#111827;border:1px solid #1e293b;border-radius:6px;padding:4px}
+.chart-title{font-size:.62rem;color:#9ca3af;padding:0 4px;display:flex;justify-content:space-between}
+.chart-title .val{font-weight:700;font-size:.72rem}
+canvas.gc{width:100%;height:70px;display:block;border-radius:4px}
+
+/* Детали */
+.details{width:100%;max-width:360px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:6px}
+.det{background:#111827;border:1px solid #1e293b;border-radius:6px;padding:6px;text-align:center}
+.det-lbl{font-size:.55rem;color:#9ca3af;text-transform:uppercase}
+.det-val{font-size:1rem;font-weight:700;margin-top:2px}
+
+.ctr{margin-top:8px;display:flex;gap:8px}
+button{background:#0284c7;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.8rem}
+button.off{background:#dc2626}
+button.cal{background:#7c3aed}
+
+.instr{font-size:.62rem;color:#6b7280;text-align:center;margin-top:6px;max-width:360px;line-height:1.3}
+</style>
+</head>
+<body>
+<h1>🧠 Стресс-камера v1</h1>
+<div class="sub">Определение стресса по визуальным маркерам: бледность, тремор, вариабельность цвета лица</div>
+
+<div class="cam-block">
+ <video id="vid" autoplay playsinline muted></video>
+ <canvas id="ov" width="320" height="240"></canvas>
+</div>
+
+<div class="stress-indicator">
+ <div class="stress-big" id="stressBig">--</div>
+ <div class="stress-label" id="stressLabel">Нажмите Старт</div>
+ <div class="stress-bar"><div class="stress-bar-fill" id="stressBar"></div></div>
+</div>
+
+<div class="charts">
+ <div class="chart-box">
+  <div class="chart-title"><span>🩸 Бледность (R/G ratio)</span><span class="val" id="vPale" style="color:#f87171">--</span></div>
+  <canvas id="cPale" class="gc"></canvas>
+ </div>
+ <div class="chart-box">
+  <div class="chart-title"><span>📳 Микродвижения (тремор)</span><span class="val" id="vTrem" style="color:#fbbf24">--</span></div>
+  <canvas id="cTrem" class="gc"></canvas>
+ </div>
+ <div class="chart-box">
+  <div class="chart-title"><span>🌈 Вариабельность цвета</span><span class="val" id="vVar" style="color:#a78bfa">--</span></div>
+  <canvas id="cVar" class="gc"></canvas>
+ </div>
+</div>
+
+<div class="details">
+ <div class="det"><div class="det-lbl">Ср. R</div><div class="det-val" id="dR" style="color:#f87171">--</div></div>
+ <div class="det"><div class="det-lbl">Ср. G</div><div class="det-val" id="dG" style="color:#4ade80">--</div></div>
+ <div class="det"><div class="det-lbl">Ср. B</div><div class="det-val" id="dB" style="color:#60a5fa">--</div></div>
+</div>
+
+<div class="ctr">
+ <button id="bOn">▶ Старт</button>
+ <button id="bCal" class="cal" style="display:none">📏 Базовая линия (10с)</button>
+ <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
+</div>
+
+<div class="instr">
+ 💡 Сядьте спокойно → нажмите "Базовая линия" → подождите 10 сек → затем ущипните себя или вспомните тревожное → наблюдайте реакцию графиков
+</div>
+
+<script>
+// =========================================================================
+const W=320, H=240;
+const ROI={x:.20,y:.10,w:.60,h:.50};
+const MAX_BUF=600; // ~20 сек
+
+let on=false, stm=null, raf=null;
+let calibrating=false, calStart=0, calDone=false;
+
+// Базовые значения (спокойное состояние)
+let baseRG=1, baseTremor=0, baseVar=0;
+let baseR=128, baseG=128, baseB=128;
+
+// Буферы графиков
+let histPale=[], histTrem=[], histVar=[];
+let histStress=[];
+
+// Предыдущий кадр (для тремора)
+let prevFrame=null;
+
+// Текущие значения
+let curRG=1, curTremor=0, curVar=0;
+let curR=128, curG=128, curB=128;
+let curStress=0;
+
+// Сглаженные значения
+let smRG=1, smTremor=0, smVar=0, smStress=0;
+
+// FPS
+let fc=0, ft0=0, fps=25;
+
+// DOM
+const vid=document.getElementById('vid');
+const ov=document.getElementById('ov');
+const co=ov.getContext('2d');
+const bOn=document.getElementById('bOn');
+const bCal=document.getElementById('bCal');
+const bOff=document.getElementById('bOff');
+const stressBig=document.getElementById('stressBig');
+const stressLabel=document.getElementById('stressLabel');
+const stressBar=document.getElementById('stressBar');
+const vPale=document.getElementById('vPale');
+const vTrem=document.getElementById('vTrem');
+const vVar=document.getElementById('vVar');
+const dR=document.getElementById('dR');
+const dG=document.getElementById('dG');
+const dB=document.getElementById('dB');
+
+const cPale=document.getElementById('cPale');
+const cTrem=document.getElementById('cTrem');
+const cVar=document.getElementById('cVar');
+const xPale=cPale.getContext('2d');
+const xTrem=cTrem.getContext('2d');
+const xVar=cVar.getContext('2d');
+
+const hc=document.createElement('canvas');hc.width=W;hc.height=H;
+const hx=hc.getContext('2d',{willReadFrequently:true});
+
+bOn.onclick=startApp;
+bOff.onclick=stopApp;
+bCal.onclick=startCalibration;
+
+async function startApp(){
+ try{
+  stm=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+  vid.srcObject=stm;await vid.play();
+  await new Promise(r=>setTimeout(r,500));
+  on=true;fc=0;ft0=performance.now();
+  bOn.style.display='none';bOff.style.display='';bCal.style.display='';
+  histPale=[];histTrem=[];histVar=[];histStress=[];
+  prevFrame=null;calDone=false;calibrating=false;
+  stressBig.textContent='--';stressLabel.textContent='Нажмите "Базовая линия"';
+  loop();
+ }catch(e){alert('Камера: '+e.message)}
+}
+
+function stopApp(){
+ on=false;
+ setTimeout(()=>{
+  if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
+  vid.srcObject=null;bOn.style.display='';bOff.style.display='none';bCal.style.display='none';
+ },100);
+}
+
+function startCalibration(){
+ calibrating=true;
+ calStart=performance.now();
+ calDone=false;
+ baseRG=0;baseTremor=0;baseVar=0;
+ baseR=0;baseG=0;baseB=0;
+ histPale=[];histTrem=[];histVar=[];histStress=[];
+ stressLabel.textContent='📏 Базовая линия... сидите спокойно!';
+ stressBig.textContent='📏';
+ bCal.style.display='none';
+}
+
+// =========================================================================
+//  ГЛАВНЫЙ ЦИКЛ
+// =========================================================================
+function loop(){
+ if(!on)return;
+ try{
+  const now=performance.now();
+  fc++;
+  if(now-ft0>2000){fps=fc/((now-ft0)/1000);fc=0;ft0=now}
+
+  hx.drawImage(vid,0,0,W,H);
+  const imgData=hx.getImageData(0,0,W,H);
+  const px=imgData.data;
+
+  // ===== ROI: средние цвета кожи =====
+  const rx=Math.floor(W*ROI.x),ry=Math.floor(H*ROI.y);
+  const rw=Math.floor(W*ROI.w),rh=Math.floor(H*ROI.h);
+
+  let sumR=0,sumG=0,sumB=0,cnt=0;
+  // Также собираем массив яркостей для вариабельности
+  const lums=[];
+
+  for(let y=ry;y<ry+rh;y+=2){
+   for(let x=rx;x<rx+rw;x+=2){
+    const i=(y*W+x)*4;
+    const r=px[i],g=px[i+1],b=px[i+2];
+    // Быстрый фильтр кожи
+    if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
+     sumR+=r;sumG+=g;sumB+=b;cnt++;
+     lums.push(0.299*r+0.587*g+0.114*b);
+    }
+   }
+  }
+
+  const skinOk=cnt>50;
+  drawROI(rx,ry,rw,rh,skinOk);
+
+  if(!skinOk){
+   stressLabel.textContent='⚠ Лицо не найдено';
+   raf=requestAnimationFrame(loop);return;
+  }
+
+  curR=sumR/cnt;
+  curG=sumG/cnt;
+  curB=sumB/cnt;
+
+  // ===== МАРКЕР 1: БЛЕДНОСТЬ (R/G ratio) =====
+  // При стрессе → вазоконстрикция → меньше крови → R падает быстрее G → R/G уменьшается
+  curRG=curG>0?curR/curG:1;
+
+  // ===== МАРКЕР 2: МИКРОДВИЖЕНИЯ (тремор) =====
+  // Считаем разницу текущего ROI с предыдущим кадром
+  curTremor=0;
+  if(prevFrame){
+   let diffSum=0,diffCnt=0;
+   for(let y=ry;y<ry+rh;y+=3){
+    for(let x=rx;x<rx+rw;x+=3){
+     const i=(y*W+x)*4;
+     const dR=Math.abs(px[i]-prevFrame[i]);
+     const dG=Math.abs(px[i+1]-prevFrame[i+1]);
+     const dB=Math.abs(px[i+2]-prevFrame[i+2]);
+     diffSum+=(dR+dG+dB)/3;
+     diffCnt++;
+    }
+   }
+   curTremor=diffCnt>0?diffSum/diffCnt:0;
+  }
+  // Сохраняем кадр для следующего сравнения
+  prevFrame=new Uint8ClampedArray(px);
+
+  // ===== МАРКЕР 3: ВАРИАБЕЛЬНОСТЬ ЦВЕТА =====
+  // Std яркости пикселей кожи — при стрессе кожа "пятнистее" из-за неравномерного кровотока
+  if(lums.length>10){
+   let mean=0;for(const l of lums)mean+=l;mean/=lums.length;
+   let ss=0;for(const l of lums)ss+=(l-mean)**2;
+   curVar=Math.sqrt(ss/lums.length);
+  }
+
+  // ===== КАЛИБРОВКА =====
+  if(calibrating){
+   const elapsed=(now-calStart)/1000;
+   const remain=Math.max(0,10-elapsed);
+   stressBig.textContent=Math.ceil(remain);
+   stressLabel.textContent=`📏 Базовая линия... ${Math.ceil(remain)}с (не двигайтесь!)`;
+
+   // Накапливаем базовые значения
+   baseRG=baseRG*0.95+curRG*0.05;
+   baseTremor=baseTremor*0.95+curTremor*0.05;
+   baseVar=baseVar*0.95+curVar*0.05;
+   baseR=baseR*0.95+curR*0.05;
+   baseG=baseG*0.95+curG*0.05;
+   baseB=baseB*0.95+curB*0.05;
+
+   if(elapsed>=10){
+    calibrating=false;
+    calDone=true;
+    bCal.style.display='';
+    stressLabel.textContent='✅ Базовая линия установлена! Теперь ущипните себя';
+    stressBig.textContent='✅';
+   }
+  }
+
+  // ===== РАСЧЁТ СТРЕССА (после калибровки) =====
+  if(calDone){
+   // Отклонение от базовой линии
+   // Бледность: R/G упал → стресс (нормируем: 0 = база, 1 = сильное падение)
+   const paleDelta=(baseRG-curRG)/baseRG;
+   const paleScore=Math.max(0,Math.min(1,paleDelta*10)); // ×10 для чувствительности
+
+   // Тремор: увеличился → стресс
+   const tremDelta=baseTremor>0.1?(curTremor-baseTremor)/baseTremor:0;
+   const tremScore=Math.max(0,Math.min(1,tremDelta*0.5));
+
+   // Вариабельность: увеличилась → стресс
+   const varDelta=baseVar>1?(curVar-baseVar)/baseVar:0;
+   const varScore=Math.max(0,Math.min(1,varDelta*2));
+
+   // Комбинированный стресс
+   const rawStress=paleScore*0.50+tremScore*0.30+varScore*0.20;
+   smStress=smStress*0.85+rawStress*0.15;
+   curStress=Math.round(smStress*100);
+
+   // Сглаженные значения для графиков
+   smRG=smRG*0.9+curRG*0.1;
+   smTremor=smTremor*0.8+curTremor*0.2;
+   smVar=smVar*0.9+curVar*0.1;
+
+   // Запись в историю
+   histPale.push(smRG);
+   histTrem.push(smTremor);
+   histVar.push(smVar);
+   histStress.push(curStress);
+   if(histPale.length>MAX_BUF){histPale.shift();histTrem.shift();histVar.shift();histStress.shift()}
+
+   // Отображение
+   updateStressDisplay(curStress);
+   vPale.textContent=smRG.toFixed(4);
+   vTrem.textContent=smTremor.toFixed(2);
+   vVar.textContent=smVar.toFixed(1);
+  }
+
+  dR.textContent=Math.round(curR);
+  dG.textContent=Math.round(curG);
+  dB.textContent=Math.round(curB);
+
+  // Графики
+  if(fc%2===0){
+   drawChart(xPale,cPale,histPale,'#f87171',calDone?baseRG:null);
+   drawChart(xTrem,cTrem,histTrem,'#fbbf24',calDone?baseTremor:null);
+   drawChart(xVar,cVar,histVar,'#a78bfa',calDone?baseVar:null);
+  }
+
+ }catch(e){console.error(e)}
+ raf=requestAnimationFrame(loop);
+}
+
+// =========================================================================
+//  ОТОБРАЖЕНИЕ СТРЕССА
+// =========================================================================
+function updateStressDisplay(s){
+ stressBig.textContent=s;
+ let color,label;
+ if(s<15){color='#22c55e';label='😌 Спокойствие'}
+ else if(s<30){color='#86efac';label='🙂 Расслабленность'}
+ else if(s<45){color='#eab308';label='😐 Норма'}
+ else if(s<60){color='#f97316';label='😟 Лёгкое напряжение'}
+ else if(s<75){color='#ef4444';label='😰 Напряжение'}
+ else{color='#dc2626';label='🚨 Стресс!'}
+
+ stressBig.style.color=color;
+ stressLabel.textContent=label;
+ stressBar.style.width=s+'%';
+ stressBar.style.background=`linear-gradient(90deg, #22c55e, #eab308, #ef4444)`;
+}
+
+// =========================================================================
+//  РИСОВАНИЕ
+// =========================================================================
+function drawROI(rx,ry,rw,rh,ok){
+ co.clearRect(0,0,W,H);
+ co.fillStyle='rgba(0,0,0,.3)';co.fillRect(0,0,W,H);co.clearRect(rx,ry,rw,rh);
+ co.strokeStyle=ok?'#22c55e':'#ef4444';co.lineWidth=2;co.strokeRect(rx,ry,rw,rh);
+}
+
+function drawChart(ctx,canvas,data,color,baseLine){
+ const w=canvas.width=canvas.clientWidth*2;
+ const h=canvas.height=canvas.clientHeight*2;
+ ctx.clearRect(0,0,w,h);
+ ctx.fillStyle='#0a0f1a';ctx.fillRect(0,0,w,h);
+
+ if(data.length<3)return;
+
+ let mn=Infinity,mx=-Infinity;
+ for(const v of data){if(v<mn)mn=v;if(v>mx)mx=v}
+ if(baseLine!==null){mn=Math.min(mn,baseLine);mx=Math.max(mx,baseLine)}
+ const range=mx-mn||1;
+ mn-=range*.05;mx+=range*.05;
+ const rng=mx-mn;
+
+ // Базовая линия
+ if(baseLine!==null){
+  const by=h-(baseLine-mn)/rng*h;
+  ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(0,by);ctx.lineTo(w,by);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';
+  ctx.fillText('база',4,by-3);
+ }
+
+ // Линия
+ ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;
+ for(let i=0;i<data.length;i++){
+  const x=i/(data.length-1)*w;
+  const y=h-(data[i]-mn)/rng*h;
+  i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+ }
+ ctx.stroke();
+
+ // Текущее значение (точка)
+ const last=data[data.length-1];
+ const lx=w-2;
+ const ly=h-(last-mn)/rng*h;
+ ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+}
+</script>
+</body>
+</html>
