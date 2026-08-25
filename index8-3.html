@@ -3,185 +3,344 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>Стресс-камера v1 — Визуальные маркеры</title>
+<title>rPPG Осциллограф v9</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:6px;overflow-x:hidden}
-h1{font-size:1.1rem;color:#38bdf8}
-.sub{font-size:.65rem;color:#6b7280;margin-bottom:6px;text-align:center;max-width:360px;line-height:1.3}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:4px;overflow-x:hidden}
+h1{font-size:.95rem;color:#38bdf8;margin-bottom:2px}
 
-.cam-block{position:relative;width:320px;height:240px;background:#000;border-radius:8px;overflow:hidden;border:2px solid #1e293b}
+.cam-block{position:relative;width:340px;height:190px;background:#000;border-radius:6px;overflow:hidden;border:2px solid #1e293b;touch-action:none;cursor:move}
 video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 #ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
 
-/* Индикатор стресса */
-.stress-indicator{width:320px;margin-top:6px;background:#111827;border:1px solid #1e293b;border-radius:8px;padding:10px;text-align:center}
-.stress-big{font-size:2.8rem;font-weight:900;transition:color .3s}
-.stress-label{font-size:.7rem;color:#9ca3af;margin-top:2px}
-.stress-bar{width:100%;height:10px;background:#1e293b;border-radius:5px;overflow:hidden;margin-top:6px}
-.stress-bar-fill{height:100%;border-radius:5px;transition:width .3s,background .3s;width:0%}
+/* ГРАФИК СРАЗУ ПОД ВИДЕО */
+.scope-wrap{width:340px;margin-top:3px;position:relative}
+canvas#scope{width:100%;height:230px;background:#060a12;border:1px solid #1e293b;border-radius:6px;display:block}
+.scope-hud{position:absolute;top:3px;right:6px;font-size:.58rem;color:#666;font-family:monospace;text-align:right;pointer-events:none}
 
-/* Графики */
-.charts{width:100%;max-width:360px;margin-top:6px;display:flex;flex-direction:column;gap:4px}
-.chart-box{background:#111827;border:1px solid #1e293b;border-radius:6px;padding:4px}
-.chart-title{font-size:.62rem;color:#9ca3af;padding:0 4px;display:flex;justify-content:space-between}
-.chart-title .val{font-weight:700;font-size:.72rem}
-canvas.gc{width:100%;height:70px;display:block;border-radius:4px}
+/* Быстрые кнопки */
+.quick{width:340px;display:flex;gap:4px;margin-top:3px;align-items:center;flex-wrap:wrap}
+.quick button{flex:0 0 auto;padding:6px 10px;font-size:.7rem;border:none;border-radius:4px;background:#1e293b;color:#d1d5db;font-weight:600;cursor:pointer}
+.quick button.prim{background:#0284c7;color:#fff}
+.quick button.mark{background:#7c3aed;color:#fff}
+.quick button.off{background:#dc2626;color:#fff}
+.quick button.act{background:#059669;color:#fff}
 
-/* Детали */
-.details{width:100%;max-width:360px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:6px}
-.det{background:#111827;border:1px solid #1e293b;border-radius:6px;padding:6px;text-align:center}
-.det-lbl{font-size:.55rem;color:#9ca3af;text-transform:uppercase}
-.det-val{font-size:1rem;font-weight:700;margin-top:2px}
-
-.ctr{margin-top:8px;display:flex;gap:8px}
-button{background:#0284c7;color:#fff;border:none;padding:8px 16px;border-radius:5px;font-weight:600;cursor:pointer;font-size:.8rem}
-button.off{background:#dc2626}
-button.cal{background:#7c3aed}
-
-.instr{font-size:.62rem;color:#6b7280;text-align:center;margin-top:6px;max-width:360px;line-height:1.3}
+/* Панели */
+.panel{width:340px;background:#0f1523;border:1px solid #1e293b;border-radius:6px;margin-top:3px;overflow:hidden}
+.ph{padding:5px 8px;font-size:.68rem;color:#94a3b8;cursor:pointer;user-select:none;display:flex;justify-content:space-between;background:#131b2e}
+.pb{padding:6px 8px;display:none}
+.pb.open{display:block}
+.pr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px}
+.pr:last-child{margin-bottom:0}
+label{font-size:.68rem;display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;white-space:nowrap}
+input[type=checkbox]{accent-color:#38bdf8;width:13px;height:13px;margin:0}
+input[type=range]{width:86px;height:4px;accent-color:#38bdf8;margin:0}
+.v{font-size:.6rem;color:#64748b;min-width:44px;font-family:monospace;text-align:right}
+select{background:#1e293b;color:#d1d5db;border:1px solid #334155;border-radius:3px;padding:2px 4px;font-size:.65rem}
+.hint{font-size:.58rem;color:#475569;line-height:1.3;margin-top:3px}
 </style>
 </head>
 <body>
-<h1>🧠 Стресс-камера v1</h1>
-<div class="sub">Определение стресса по визуальным маркерам: бледность, тремор, вариабельность цвета лица</div>
+<h1>🔬 rPPG Осциллограф v9</h1>
 
-<div class="cam-block">
+<div class="cam-block" id="camBlock">
  <video id="vid" autoplay playsinline muted></video>
- <canvas id="ov" width="320" height="240"></canvas>
+ <canvas id="ov" width="340" height="190"></canvas>
 </div>
 
-<div class="stress-indicator">
- <div class="stress-big" id="stressBig">--</div>
- <div class="stress-label" id="stressLabel">Нажмите Старт</div>
- <div class="stress-bar"><div class="stress-bar-fill" id="stressBar"></div></div>
+<div class="scope-wrap">
+ <canvas id="scope"></canvas>
+ <div class="scope-hud" id="hud"></div>
 </div>
 
-<div class="charts">
- <div class="chart-box">
-  <div class="chart-title"><span>🩸 Бледность (R/G ratio)</span><span class="val" id="vPale" style="color:#f87171">--</span></div>
-  <canvas id="cPale" class="gc"></canvas>
+<div class="quick">
+ <button id="bOn" class="prim">▶ Старт</button>
+ <button id="bOff" class="off" style="display:none">⏹</button>
+ <button id="bMark" class="mark">📍 МЕТКА</button>
+ <button id="bFreeze">⏸</button>
+ <button id="bClear">🗑</button>
+ <button id="bCenter">⊕ Центр</button>
+</div>
+
+<!-- КАНАЛЫ -->
+<div class="panel">
+ <div class="ph" data-t="p1">📺 Каналы <span>▾</span></div>
+ <div class="pb open" id="p1">
+  <div class="pr">
+   <label style="color:#ff5555"><input type="checkbox" id="cR" checked>R</label>
+   <label style="color:#55ff77"><input type="checkbox" id="cG" checked>G</label>
+   <label style="color:#5599ff"><input type="checkbox" id="cB" checked>B</label>
+   <label style="color:#888"><input type="checkbox" id="cMOT">Движ.</label>
+  </div>
+  <div class="pr">
+   <label style="color:#ffdd44"><input type="checkbox" id="cDIV">DIV = R−(G+B)/2</label>
+  </div>
+  <div class="pr">
+   <label style="color:#ff9955"><input type="checkbox" id="cRG">R/G</label>
+   <label style="color:#ff55ff"><input type="checkbox" id="cRB">R/B</label>
+   <label style="color:#55ffdd"><input type="checkbox" id="cGB">G/B</label>
+  </div>
+  <div class="pr">
+   <label style="color:#ff77aa"><input type="checkbox" id="cPOS">POS</label>
+   <label style="color:#aaff55"><input type="checkbox" id="cCHR">CHROM</label>
+   <label><input type="checkbox" id="cDual">÷ фон</label>
+  </div>
+  <div class="hint">DIV — «отслоение» красного от зелёного и синего. Движение двигает все каналы вместе → DIV≈0. Кровенаполнение меняет только R → DIV отклоняется.</div>
  </div>
- <div class="chart-box">
-  <div class="chart-title"><span>📳 Микродвижения (тремор)</span><span class="val" id="vTrem" style="color:#fbbf24">--</span></div>
-  <canvas id="cTrem" class="gc"></canvas>
+</div>
+
+<!-- МАСШТАБ -->
+<div class="panel">
+ <div class="ph" data-t="p2">📐 Масштаб <span>▾</span></div>
+ <div class="pb open" id="p2">
+  <div class="pr">
+   <label>Y:<input type="range" id="sY" min="0" max="100" value="35"><span class="v" id="vY"></span></label>
+   <label><input type="checkbox" id="cAuto">Авто</label>
+  </div>
+  <div class="pr">
+   <label>Время:<input type="range" id="sT" min="2" max="30" value="10"><span class="v" id="vT"></span></label>
+   <label><input type="checkbox" id="cGrid" checked>Сетка</label>
+  </div>
+  <div class="pr">
+   <label>Сдвиг Y:<input type="range" id="sOff" min="-100" max="100" value="0"><span class="v" id="vOff"></span></label>
+   <label><input type="checkbox" id="cSplit">Раздельно</label>
+  </div>
+  <div class="hint">«Раздельно» — каждый канал на своей дорожке (удобно сравнивать формы). Слайдер Y — логарифмический, от ±10 до ±0.00003.</div>
  </div>
- <div class="chart-box">
-  <div class="chart-title"><span>🌈 Вариабельность цвета</span><span class="val" id="vVar" style="color:#a78bfa">--</span></div>
-  <canvas id="cVar" class="gc"></canvas>
+</div>
+
+<!-- ФИЛЬТРЫ -->
+<div class="panel">
+ <div class="ph" data-t="p3">🔧 Фильтры <span>▾</span></div>
+ <div class="pb" id="p3">
+  <div class="pr">
+   <label><input type="checkbox" id="cHP" checked>Убрать DC</label>
+   <label>Срез:<input type="range" id="sHP" min="1" max="200" value="15"><span class="v" id="vHP"></span></label>
+  </div>
+  <div class="pr">
+   <label><input type="checkbox" id="cLP">Сглаж.</label>
+   <label>Срез:<input type="range" id="sLP" min="20" max="1500" value="400"><span class="v" id="vLP"></span></label>
+  </div>
+  <div class="pr">
+   <label>Норм.:
+    <select id="selNorm">
+     <option value="none">Нет</option>
+     <option value="rel" selected>Относит. (÷сред)</option>
+    </select>
+   </label>
+  </div>
+  <div class="hint">«Убрать DC» — причинный ВЧ-фильтр (не пересчитывается задним числом → график не дёргается). Малый срез (0.05 Гц) = медленные тренды видны; большой (1 Гц) = только быстрые.</div>
  </div>
 </div>
 
-<div class="details">
- <div class="det"><div class="det-lbl">Ср. R</div><div class="det-val" id="dR" style="color:#f87171">--</div></div>
- <div class="det"><div class="det-lbl">Ср. G</div><div class="det-val" id="dG" style="color:#4ade80">--</div></div>
- <div class="det"><div class="det-lbl">Ср. B</div><div class="det-val" id="dB" style="color:#60a5fa">--</div></div>
+<!-- ROI -->
+<div class="panel">
+ <div class="ph" data-t="p4">📍 Область (перетаскивайте пальцем) <span>▾</span></div>
+ <div class="pb" id="p4">
+  <div class="pr">
+   <label>Ширина:<input type="range" id="sW" min="8" max="90" value="45"><span class="v" id="vW"></span></label>
+  </div>
+  <div class="pr">
+   <label>Высота:<input type="range" id="sH" min="8" max="90" value="45"><span class="v" id="vH"></span></label>
+  </div>
+  <div class="pr">
+   <label><input type="checkbox" id="cSkin">Только кожа</label>
+   <button id="bRoiCenter" style="padding:3px 8px;font-size:.65rem;background:#1e293b;color:#d1d5db;border:none;border-radius:3px">В центр</button>
+  </div>
+  <div class="hint">Перетащите рамку пальцем по видео. Можно навести на лоб, щёку, грудь, ладонь.</div>
+ </div>
 </div>
 
-<div class="ctr">
- <button id="bOn">▶ Старт</button>
- <button id="bCal" class="cal" style="display:none">📏 Базовая линия (10с)</button>
- <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
-</div>
-
-<div class="instr">
- 💡 Сядьте спокойно → нажмите "Базовая линия" → подождите 10 сек → затем ущипните себя или вспомните тревожное → наблюдайте реакцию графиков
+<!-- СТАТИСТИКА -->
+<div class="panel">
+ <div class="ph" data-t="p5">📊 Статистика окна <span>▾</span></div>
+ <div class="pb" id="p5">
+  <div id="statBox" style="font-size:.62rem;font-family:monospace;line-height:1.5;color:#94a3b8"></div>
+  <div class="hint">p2p — размах (пик-пик), rms — среднеквадратичное. Если у DIV размах заметно растёт при щипке, а «Движ.» при этом низкое — это настоящий физиологический отклик.</div>
+ </div>
 </div>
 
 <script>
 // =========================================================================
-const W=320, H=240;
-const ROI={x:.20,y:.10,w:.60,h:.50};
-const MAX_BUF=600; // ~20 сек
+const CW=340, CH=190;
+const MAXBUF=4000;
 
-let on=false, stm=null, raf=null;
-let calibrating=false, calStart=0, calDone=false;
-
-// Базовые значения (спокойное состояние)
-let baseRG=1, baseTremor=0, baseVar=0;
-let baseR=128, baseG=128, baseB=128;
-
-// Буферы графиков
-let histPale=[], histTrem=[], histVar=[];
-let histStress=[];
-
-// Предыдущий кадр (для тремора)
-let prevFrame=null;
-
-// Текущие значения
-let curRG=1, curTremor=0, curVar=0;
-let curR=128, curG=128, curB=128;
-let curStress=0;
-
-// Сглаженные значения
-let smRG=1, smTremor=0, smVar=0, smStress=0;
-
-// FPS
+let on=false, stm=null, raf=null, frozen=false;
 let fc=0, ft0=0, fps=25;
+let needReprocess=false;
+
+// ROI (в долях кадра), центр
+let roi={cx:.5, cy:.45, w:.45, h:.45};
+let dragging=false, dragOff={x:0,y:0};
+
+// Сырые буферы
+const raw={R:[],G:[],B:[],bR:[],bG:[],bB:[],MOT:[],T:[]};
+// Обработанные (то, что рисуем) — НЕ пересчитываются каждый кадр
+const proc={};
+const KEYS=['R','G','B','RG','RB','GB','DIV','POS','CHROM','MOT'];
+KEYS.forEach(k=>proc[k]=[]);
+
+// Состояния причинных фильтров
+const fstate={};
+function resetFilters(){KEYS.forEach(k=>fstate[k]={init:false,base:0,lp:0})}
+resetFilters();
+
+// Метки событий
+let marks=[];
+
+let prevPx=null;
+
+const CHDEF=[
+ {k:'R',    el:'cR',   col:'#ff5555', name:'R'},
+ {k:'G',    el:'cG',   col:'#55ff77', name:'G'},
+ {k:'B',    el:'cB',   col:'#5599ff', name:'B'},
+ {k:'MOT',  el:'cMOT', col:'#888888', name:'MOT'},
+ {k:'DIV',  el:'cDIV', col:'#ffdd44', name:'DIV'},
+ {k:'RG',   el:'cRG',  col:'#ff9955', name:'R/G'},
+ {k:'RB',   el:'cRB',  col:'#ff55ff', name:'R/B'},
+ {k:'GB',   el:'cGB',  col:'#55ffdd', name:'G/B'},
+ {k:'POS',  el:'cPOS', col:'#ff77aa', name:'POS'},
+ {k:'CHROM',el:'cCHR', col:'#aaff55', name:'CHROM'}
+];
 
 // DOM
-const vid=document.getElementById('vid');
-const ov=document.getElementById('ov');
-const co=ov.getContext('2d');
-const bOn=document.getElementById('bOn');
-const bCal=document.getElementById('bCal');
-const bOff=document.getElementById('bOff');
-const stressBig=document.getElementById('stressBig');
-const stressLabel=document.getElementById('stressLabel');
-const stressBar=document.getElementById('stressBar');
-const vPale=document.getElementById('vPale');
-const vTrem=document.getElementById('vTrem');
-const vVar=document.getElementById('vVar');
-const dR=document.getElementById('dR');
-const dG=document.getElementById('dG');
-const dB=document.getElementById('dB');
-
-const cPale=document.getElementById('cPale');
-const cTrem=document.getElementById('cTrem');
-const cVar=document.getElementById('cVar');
-const xPale=cPale.getContext('2d');
-const xTrem=cTrem.getContext('2d');
-const xVar=cVar.getContext('2d');
-
-const hc=document.createElement('canvas');hc.width=W;hc.height=H;
+const vid=document.getElementById('vid'), ov=document.getElementById('ov'), oc=ov.getContext('2d');
+const camBlock=document.getElementById('camBlock');
+const scope=document.getElementById('scope'), sx=scope.getContext('2d');
+const hud=document.getElementById('hud'), statBox=document.getElementById('statBox');
+const hc=document.createElement('canvas'); hc.width=CW; hc.height=CH;
 const hx=hc.getContext('2d',{willReadFrequently:true});
 
-bOn.onclick=startApp;
-bOff.onclick=stopApp;
-bCal.onclick=startCalibration;
+const $=id=>document.getElementById(id);
 
-async function startApp(){
+// Панели-аккордеоны
+document.querySelectorAll('.ph').forEach(h=>{
+ h.onclick=()=>{const b=$(h.dataset.t); b.classList.toggle('open');
+  h.querySelector('span').textContent=b.classList.contains('open')?'▾':'▸'}
+});
+
+// Слайдеры
+function yRangeFromSlider(){const s=+$('sY').value; return 10*Math.pow(10,-(s/100)*5.5)}
+function upd(){
+ $('vY').textContent='±'+fmt(yRangeFromSlider());
+ $('vT').textContent=$('sT').value+'с';
+ $('vHP').textContent=(+$('sHP').value/100).toFixed(2)+'Гц';
+ $('vLP').textContent=(+$('sLP').value/100).toFixed(1)+'Гц';
+ $('vOff').textContent=(+$('sOff').value/100).toFixed(2);
+ $('vW').textContent=$('sW').value+'%';
+ $('vH').textContent=$('sH').value+'%';
+ roi.w=+$('sW').value/100; roi.h=+$('sH').value/100;
+}
+['sY','sT','sHP','sLP','sOff','sW','sH'].forEach(id=>$(id).oninput=()=>{
+ upd(); if(id==='sHP'||id==='sLP') needReprocess=true;
+});
+['cHP','cLP','cDual','selNorm','cSkin'].forEach(id=>$(id).onchange=()=>needReprocess=true);
+upd();
+
+// Кнопки
+$('bOn').onclick=start; $('bOff').onclick=stop;
+$('bFreeze').onclick=e=>{frozen=!frozen; e.target.textContent=frozen?'▶':'⏸'; e.target.classList.toggle('act',frozen)};
+$('bClear').onclick=()=>{KEYS.forEach(k=>proc[k]=[]);Object.keys(raw).forEach(k=>raw[k]=[]);marks=[];resetFilters()};
+$('bMark').onclick=()=>{marks.push(raw.T.length); if(marks.length>50)marks.shift()};
+$('bCenter').onclick=()=>{resetFilters(); needReprocess=true};
+$('bRoiCenter').onclick=()=>{roi.cx=.5;roi.cy=.45};
+
+// Перетаскивание ROI
+camBlock.addEventListener('pointerdown',e=>{dragging=true;camBlock.setPointerCapture(e.pointerId);movRoi(e)});
+camBlock.addEventListener('pointermove',e=>{if(dragging)movRoi(e)});
+camBlock.addEventListener('pointerup',()=>dragging=false);
+camBlock.addEventListener('pointercancel',()=>dragging=false);
+function movRoi(e){
+ const r=camBlock.getBoundingClientRect();
+ let x=1-(e.clientX-r.left)/r.width;      // зеркалим
+ let y=(e.clientY-r.top)/r.height;
+ roi.cx=Math.max(roi.w/2,Math.min(1-roi.w/2,x));
+ roi.cy=Math.max(roi.h/2,Math.min(1-roi.h/2,y));
+}
+
+async function start(){
  try{
   stm=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
-  vid.srcObject=stm;await vid.play();
-  await new Promise(r=>setTimeout(r,500));
-  on=true;fc=0;ft0=performance.now();
-  bOn.style.display='none';bOff.style.display='';bCal.style.display='';
-  histPale=[];histTrem=[];histVar=[];histStress=[];
-  prevFrame=null;calDone=false;calibrating=false;
-  stressBig.textContent='--';stressLabel.textContent='Нажмите "Базовая линия"';
+  vid.srcObject=stm; await vid.play();
+  Object.keys(raw).forEach(k=>raw[k]=[]); KEYS.forEach(k=>proc[k]=[]);
+  marks=[]; prevPx=null; resetFilters();
+  on=true; fc=0; ft0=performance.now();
+  $('bOn').style.display='none'; $('bOff').style.display='';
   loop();
  }catch(e){alert('Камера: '+e.message)}
 }
-
-function stopApp(){
+function stop(){
  on=false;
- setTimeout(()=>{
-  if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
-  vid.srcObject=null;bOn.style.display='';bOff.style.display='none';bCal.style.display='none';
- },100);
+ setTimeout(()=>{if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
+  vid.srcObject=null; $('bOn').style.display=''; $('bOff').style.display='none'},80);
 }
 
-function startCalibration(){
- calibrating=true;
- calStart=performance.now();
- calDone=false;
- baseRG=0;baseTremor=0;baseVar=0;
- baseR=0;baseG=0;baseB=0;
- histPale=[];histTrem=[];histVar=[];histStress=[];
- stressLabel.textContent='📏 Базовая линия... сидите спокойно!';
- stressBig.textContent='📏';
- bCal.style.display='none';
+// =========================================================================
+//  ПРИЧИННЫЕ ФИЛЬТРЫ (обрабатывают один отсчёт, состояние сохраняется)
+// =========================================================================
+function alphaFrom(fcHz,fs){return 1-Math.exp(-2*Math.PI*fcHz/Math.max(fs,1))}
+
+function filt(key,val,fs,useHP,hpHz,useLP,lpHz){
+ const st=fstate[key];
+ if(!st.init||!isFinite(st.base)){st.init=true;st.base=val;st.lp=val;return 0}
+ let v=val;
+ if(useLP){const a=alphaFrom(lpHz,fs); st.lp=st.lp*(1-a)+v*a; v=st.lp}
+ else st.lp=v;
+ if(useHP){const a=alphaFrom(hpHz,fs); st.base=st.base*(1-a)+v*a; v=v-st.base}
+ else st.base=v;
+ return v;
+}
+
+// Вычисление всех производных каналов из сырого кадра
+function deriveChannels(i){
+ const useDual=$('cDual').checked;
+ const norm=$('selNorm').value;
+ let R=raw.R[i],G=raw.G[i],B=raw.B[i];
+ if(useDual){
+  R=raw.bR[i]>5?R/raw.bR[i]:R/128;
+  G=raw.bG[i]>5?G/raw.bG[i]:G/128;
+  B=raw.bB[i]>5?B/raw.bB[i]:B/128;
+ }
+ // Относительная нормировка каждого канала на свой скользящий уровень
+ // делается фильтром DC ниже; здесь просто масштабируем к ~1
+ if(norm==='rel'&&!useDual){R/=128;G/=128;B/=128}
+
+ const eps=1e-9;
+ const o={};
+ o.R=R; o.G=G; o.B=B;
+ o.RG=G>eps?R/G:0;
+ o.RB=B>eps?R/B:0;
+ o.GB=B>eps?G/B:0;
+ // Ключевое: отслоение красного от среднего зелёного+синего
+ o.DIV=R-(G+B)/2;
+ // POS / CHROM (упрощённые, на мгновенных значениях после DC-удаления
+ // они дают то же, что классические, с точностью до масштаба)
+ o.POS=(G-B)+0.5*(-2*R+G+B);
+ o.CHROM=(3*R-2*G)-0.5*(1.5*R+G-1.5*B);
+ o.MOT=raw.MOT[i];
+ return o;
+}
+
+function processSample(i,fs){
+ const d=deriveChannels(i);
+ const useHP=$('cHP').checked, hpHz=+$('sHP').value/100;
+ const useLP=$('cLP').checked, lpHz=+$('sLP').value/100;
+ for(const k of KEYS){
+  // MOT не фильтруем ВЧ — это уровень движения, нужен как есть
+  const v=(k==='MOT') ? d.MOT
+        : filt(k,d[k],fs,useHP,hpHz,useLP,lpHz);
+  proc[k].push(v);
+  if(proc[k].length>MAXBUF)proc[k].shift();
+ }
+}
+
+function reprocessAll(){
+ KEYS.forEach(k=>proc[k]=[]);
+ resetFilters();
+ const n=raw.R.length;
+ for(let i=0;i<n;i++)processSample(i,fps);
+ needReprocess=false;
 }
 
 // =========================================================================
@@ -190,222 +349,182 @@ function startCalibration(){
 function loop(){
  if(!on)return;
  try{
-  const now=performance.now();
-  fc++;
-  if(now-ft0>2000){fps=fc/((now-ft0)/1000);fc=0;ft0=now}
+  const now=performance.now(); fc++;
+  if(now-ft0>1500){fps=Math.max(5,fc/((now-ft0)/1000));fc=0;ft0=now}
 
-  hx.drawImage(vid,0,0,W,H);
-  const imgData=hx.getImageData(0,0,W,H);
-  const px=imgData.data;
+  hx.drawImage(vid,0,0,CW,CH);
+  const img=hx.getImageData(0,0,CW,CH), px=img.data;
 
-  // ===== ROI: средние цвета кожи =====
-  const rx=Math.floor(W*ROI.x),ry=Math.floor(H*ROI.y);
-  const rw=Math.floor(W*ROI.w),rh=Math.floor(H*ROI.h);
+  const rx=Math.round(CW*(roi.cx-roi.w/2)), ry=Math.round(CH*(roi.cy-roi.h/2));
+  const rw=Math.round(CW*roi.w), rh=Math.round(CH*roi.h);
+  const x0=Math.max(0,rx), y0=Math.max(0,ry);
+  const x1=Math.min(CW,rx+rw), y1=Math.min(CH,ry+rh);
 
-  let sumR=0,sumG=0,sumB=0,cnt=0;
-  // Также собираем массив яркостей для вариабельности
-  const lums=[];
+  const skinOnly=$('cSkin').checked;
+  let sR=0,sG=0,sB=0,cnt=0, mot=0,motN=0;
 
-  for(let y=ry;y<ry+rh;y+=2){
-   for(let x=rx;x<rx+rw;x+=2){
-    const i=(y*W+x)*4;
+  for(let y=y0;y<y1;y++){
+   for(let x=x0;x<x1;x++){
+    const i=(y*CW+x)*4;
     const r=px[i],g=px[i+1],b=px[i+2];
-    // Быстрый фильтр кожи
-    if(r>50&&g>30&&b>15&&r>b+3&&(r-b)>8&&r<252){
-     sumR+=r;sumG+=g;sumB+=b;cnt++;
-     lums.push(0.299*r+0.587*g+0.114*b);
+    if(skinOnly){
+     if(!(r>45&&g>28&&b>12&&r>b+3&&(r-b)>8&&r<253))continue;
+    }
+    sR+=r;sG+=g;sB+=b;cnt++;
+    if(prevPx && ((x+y)&3)===0){
+     mot+=Math.abs(r-prevPx[i])+Math.abs(g-prevPx[i+1])+Math.abs(b-prevPx[i+2]);
+     motN++;
     }
    }
   }
+  const ok=cnt>30;
 
-  const skinOk=cnt>50;
-  drawROI(rx,ry,rw,rh,skinOk);
-
-  if(!skinOk){
-   stressLabel.textContent='⚠ Лицо не найдено';
-   raf=requestAnimationFrame(loop);return;
-  }
-
-  curR=sumR/cnt;
-  curG=sumG/cnt;
-  curB=sumB/cnt;
-
-  // ===== МАРКЕР 1: БЛЕДНОСТЬ (R/G ratio) =====
-  // При стрессе → вазоконстрикция → меньше крови → R падает быстрее G → R/G уменьшается
-  curRG=curG>0?curR/curG:1;
-
-  // ===== МАРКЕР 2: МИКРОДВИЖЕНИЯ (тремор) =====
-  // Считаем разницу текущего ROI с предыдущим кадром
-  curTremor=0;
-  if(prevFrame){
-   let diffSum=0,diffCnt=0;
-   for(let y=ry;y<ry+rh;y+=3){
-    for(let x=rx;x<rx+rw;x+=3){
-     const i=(y*W+x)*4;
-     const dR=Math.abs(px[i]-prevFrame[i]);
-     const dG=Math.abs(px[i+1]-prevFrame[i+1]);
-     const dB=Math.abs(px[i+2]-prevFrame[i+2]);
-     diffSum+=(dR+dG+dB)/3;
-     diffCnt++;
-    }
+  // фон — 4 угла
+  let bR=0,bG=0,bB=0,bn=0;
+  const BG=[[2,2],[CW-22,2],[2,CH-22],[CW-22,CH-22]];
+  for(const [bx,by] of BG){
+   let a=0,c=0,e=0,n=0;
+   for(let y=by;y<by+20&&y<CH;y+=2)for(let x=bx;x<bx+20&&x<CW;x+=2){
+    const i=(y*CW+x)*4; a+=px[i];c+=px[i+1];e+=px[i+2];n++;
    }
-   curTremor=diffCnt>0?diffSum/diffCnt:0;
+   if(n){bR+=a/n;bG+=c/n;bB+=e/n;bn++}
   }
-  // Сохраняем кадр для следующего сравнения
-  prevFrame=new Uint8ClampedArray(px);
+  if(bn){bR/=bn;bG/=bn;bB/=bn}else{bR=bG=bB=128}
 
-  // ===== МАРКЕР 3: ВАРИАБЕЛЬНОСТЬ ЦВЕТА =====
-  // Std яркости пикселей кожи — при стрессе кожа "пятнистее" из-за неравномерного кровотока
-  if(lums.length>10){
-   let mean=0;for(const l of lums)mean+=l;mean/=lums.length;
-   let ss=0;for(const l of lums)ss+=(l-mean)**2;
-   curVar=Math.sqrt(ss/lums.length);
-  }
+  prevPx=new Uint8ClampedArray(px);
 
-  // ===== КАЛИБРОВКА =====
-  if(calibrating){
-   const elapsed=(now-calStart)/1000;
-   const remain=Math.max(0,10-elapsed);
-   stressBig.textContent=Math.ceil(remain);
-   stressLabel.textContent=`📏 Базовая линия... ${Math.ceil(remain)}с (не двигайтесь!)`;
+  if(ok && !frozen){
+   raw.R.push(sR/cnt); raw.G.push(sG/cnt); raw.B.push(sB/cnt);
+   raw.bR.push(bR); raw.bG.push(bG); raw.bB.push(bB);
+   raw.MOT.push(motN?mot/motN/3:0);
+   raw.T.push(now);
+   Object.keys(raw).forEach(k=>{if(raw[k].length>MAXBUF)raw[k].shift()});
+   if(needReprocess) reprocessAll();
+   else processSample(raw.R.length-1,fps);
+  } else if(needReprocess){ reprocessAll() }
 
-   // Накапливаем базовые значения
-   baseRG=baseRG*0.95+curRG*0.05;
-   baseTremor=baseTremor*0.95+curTremor*0.05;
-   baseVar=baseVar*0.95+curVar*0.05;
-   baseR=baseR*0.95+curR*0.05;
-   baseG=baseG*0.95+curG*0.05;
-   baseB=baseB*0.95+curB*0.05;
-
-   if(elapsed>=10){
-    calibrating=false;
-    calDone=true;
-    bCal.style.display='';
-    stressLabel.textContent='✅ Базовая линия установлена! Теперь ущипните себя';
-    stressBig.textContent='✅';
-   }
-  }
-
-  // ===== РАСЧЁТ СТРЕССА (после калибровки) =====
-  if(calDone){
-   // Отклонение от базовой линии
-   // Бледность: R/G упал → стресс (нормируем: 0 = база, 1 = сильное падение)
-   const paleDelta=(baseRG-curRG)/baseRG;
-   const paleScore=Math.max(0,Math.min(1,paleDelta*10)); // ×10 для чувствительности
-
-   // Тремор: увеличился → стресс
-   const tremDelta=baseTremor>0.1?(curTremor-baseTremor)/baseTremor:0;
-   const tremScore=Math.max(0,Math.min(1,tremDelta*0.5));
-
-   // Вариабельность: увеличилась → стресс
-   const varDelta=baseVar>1?(curVar-baseVar)/baseVar:0;
-   const varScore=Math.max(0,Math.min(1,varDelta*2));
-
-   // Комбинированный стресс
-   const rawStress=paleScore*0.50+tremScore*0.30+varScore*0.20;
-   smStress=smStress*0.85+rawStress*0.15;
-   curStress=Math.round(smStress*100);
-
-   // Сглаженные значения для графиков
-   smRG=smRG*0.9+curRG*0.1;
-   smTremor=smTremor*0.8+curTremor*0.2;
-   smVar=smVar*0.9+curVar*0.1;
-
-   // Запись в историю
-   histPale.push(smRG);
-   histTrem.push(smTremor);
-   histVar.push(smVar);
-   histStress.push(curStress);
-   if(histPale.length>MAX_BUF){histPale.shift();histTrem.shift();histVar.shift();histStress.shift()}
-
-   // Отображение
-   updateStressDisplay(curStress);
-   vPale.textContent=smRG.toFixed(4);
-   vTrem.textContent=smTremor.toFixed(2);
-   vVar.textContent=smVar.toFixed(1);
-  }
-
-  dR.textContent=Math.round(curR);
-  dG.textContent=Math.round(curG);
-  dB.textContent=Math.round(curB);
-
-  // Графики
-  if(fc%2===0){
-   drawChart(xPale,cPale,histPale,'#f87171',calDone?baseRG:null);
-   drawChart(xTrem,cTrem,histTrem,'#fbbf24',calDone?baseTremor:null);
-   drawChart(xVar,cVar,histVar,'#a78bfa',calDone?baseVar:null);
-  }
+  drawOverlay(rx,ry,rw,rh,ok);
+  drawScope();
 
  }catch(e){console.error(e)}
  raf=requestAnimationFrame(loop);
 }
 
 // =========================================================================
-//  ОТОБРАЖЕНИЕ СТРЕССА
-// =========================================================================
-function updateStressDisplay(s){
- stressBig.textContent=s;
- let color,label;
- if(s<15){color='#22c55e';label='😌 Спокойствие'}
- else if(s<30){color='#86efac';label='🙂 Расслабленность'}
- else if(s<45){color='#eab308';label='😐 Норма'}
- else if(s<60){color='#f97316';label='😟 Лёгкое напряжение'}
- else if(s<75){color='#ef4444';label='😰 Напряжение'}
- else{color='#dc2626';label='🚨 Стресс!'}
-
- stressBig.style.color=color;
- stressLabel.textContent=label;
- stressBar.style.width=s+'%';
- stressBar.style.background=`linear-gradient(90deg, #22c55e, #eab308, #ef4444)`;
+function drawOverlay(rx,ry,rw,rh,ok){
+ oc.clearRect(0,0,CW,CH);
+ oc.fillStyle='rgba(0,0,0,.25)'; oc.fillRect(0,0,CW,CH);
+ oc.clearRect(rx,ry,rw,rh);
+ oc.strokeStyle=ok?'#22c55e':'#ef4444'; oc.lineWidth=2; oc.strokeRect(rx,ry,rw,rh);
+ const c=9; oc.lineWidth=3;
+ oc.beginPath();oc.moveTo(rx,ry+c);oc.lineTo(rx,ry);oc.lineTo(rx+c,ry);oc.stroke();
+ oc.beginPath();oc.moveTo(rx+rw-c,ry);oc.lineTo(rx+rw,ry);oc.lineTo(rx+rw,ry+c);oc.stroke();
+ oc.beginPath();oc.moveTo(rx,ry+rh-c);oc.lineTo(rx,ry+rh);oc.lineTo(rx+c,ry+rh);oc.stroke();
+ oc.beginPath();oc.moveTo(rx+rw-c,ry+rh);oc.lineTo(rx+rw,ry+rh);oc.lineTo(rx+rw,ry+rh-c);oc.stroke();
+ oc.strokeStyle='rgba(56,189,248,.35)';oc.lineWidth=1;oc.setLineDash([3,3]);
+ [[2,2],[CW-22,2],[2,CH-22],[CW-22,CH-22]].forEach(([x,y])=>oc.strokeRect(x,y,20,20));
+ oc.setLineDash([]);
 }
 
-// =========================================================================
-//  РИСОВАНИЕ
-// =========================================================================
-function drawROI(rx,ry,rw,rh,ok){
- co.clearRect(0,0,W,H);
- co.fillStyle='rgba(0,0,0,.3)';co.fillRect(0,0,W,H);co.clearRect(rx,ry,rw,rh);
- co.strokeStyle=ok?'#22c55e':'#ef4444';co.lineWidth=2;co.strokeRect(rx,ry,rw,rh);
+function fmt(v){
+ const a=Math.abs(v);
+ if(a===0)return '0';
+ if(a>=1)return v.toFixed(2);
+ if(a>=0.01)return v.toFixed(4);
+ return v.toExponential(1);
 }
 
-function drawChart(ctx,canvas,data,color,baseLine){
- const w=canvas.width=canvas.clientWidth*2;
- const h=canvas.height=canvas.clientHeight*2;
- ctx.clearRect(0,0,w,h);
- ctx.fillStyle='#0a0f1a';ctx.fillRect(0,0,w,h);
+function drawScope(){
+ const w=scope.width=scope.clientWidth*2;
+ const h=scope.height=scope.clientHeight*2;
+ sx.clearRect(0,0,w,h); sx.fillStyle='#060a12'; sx.fillRect(0,0,w,h);
 
- if(data.length<3)return;
-
- let mn=Infinity,mx=-Infinity;
- for(const v of data){if(v<mn)mn=v;if(v>mx)mx=v}
- if(baseLine!==null){mn=Math.min(mn,baseLine);mx=Math.max(mx,baseLine)}
- const range=mx-mn||1;
- mn-=range*.05;mx+=range*.05;
- const rng=mx-mn;
-
- // Базовая линия
- if(baseLine!==null){
-  const by=h-(baseLine-mn)/rng*h;
-  ctx.strokeStyle='rgba(255,255,255,.2)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
-  ctx.beginPath();ctx.moveTo(0,by);ctx.lineTo(w,by);ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='9px monospace';
-  ctx.fillText('база',4,by-3);
+ const act=CHDEF.filter(c=>$(c.el).checked);
+ if(!act.length||proc.R.length<3){
+  sx.fillStyle='#334155';sx.font='16px sans-serif';
+  sx.fillText(proc.R.length<3?'нет данных':'выберите канал',20,h/2);return;
  }
 
- // Линия
- ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;
- for(let i=0;i<data.length;i++){
-  const x=i/(data.length-1)*w;
-  const y=h-(data[i]-mn)/rng*h;
-  i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
- }
- ctx.stroke();
+ const secs=+$('sT').value;
+ const N=proc.R.length;
+ const show=Math.min(N,Math.max(10,Math.round(fps*secs)));
+ const st=N-show;
 
- // Текущее значение (точка)
- const last=data[data.length-1];
- const lx=w-2;
- const ly=h-(last-mn)/rng*h;
- ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+ const pad={l:6,r:6,t:6,b:6};
+ const pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+ const split=$('cSplit').checked;
+ const lanes=split?act.length:1;
+ const laneH=ph/lanes;
+
+ // диапазон
+ let yr=yRangeFromSlider();
+ if($('cAuto').checked){
+  let m=0;
+  for(const c of act)for(let i=st;i<N;i++){const v=Math.abs(proc[c.k][i]);if(v>m)m=v}
+  yr=m>0?m*1.2:1;
+ }
+ const yoff=(+$('sOff').value/100)*yr;
+
+ // сетка
+ if($('cGrid').checked){
+  sx.strokeStyle='rgba(255,255,255,.05)';sx.lineWidth=1;
+  for(let s=1;s<secs;s++){
+   const x=pad.l+pw-(s*fps/show)*pw;
+   if(x<pad.l)break;
+   sx.beginPath();sx.moveTo(x,pad.t);sx.lineTo(x,pad.t+ph);sx.stroke();
+  }
+ }
+
+ act.forEach((c,li)=>{
+  const top=pad.t+li*laneH, mid=top+laneH/2;
+  // нулевая линия
+  sx.strokeStyle='rgba(255,255,255,.12)';sx.lineWidth=1;sx.setLineDash([6,6]);
+  sx.beginPath();sx.moveTo(pad.l,mid);sx.lineTo(pad.l+pw,mid);sx.stroke();sx.setLineDash([]);
+
+  const arr=proc[c.k];
+  // MOT рисуем от низа дорожки
+  const isMot=c.k==='MOT';
+  let motMax=1;
+  if(isMot){for(let i=st;i<N;i++)if(arr[i]>motMax)motMax=arr[i]}
+
+  sx.beginPath(); sx.strokeStyle=c.col; sx.lineWidth=1.6;
+  for(let i=st;i<N;i++){
+   const x=pad.l+((i-st)/(show-1))*pw;
+   let y;
+   if(isMot){ y=top+laneH-(arr[i]/motMax)*laneH*0.9 }
+   else { y=mid-((arr[i]-yoff)/yr)*(laneH/2*0.92) }
+   y=Math.max(top,Math.min(top+laneH,y));
+   i===st?sx.moveTo(x,y):sx.lineTo(x,y);
+  }
+  sx.stroke();
+
+  sx.fillStyle=c.col; sx.font='bold 13px monospace';
+  sx.fillText(c.name+' '+fmt(arr[N-1]), pad.l+4, top+15);
+ });
+
+ // метки событий
+ sx.strokeStyle='#c084fc'; sx.lineWidth=2;
+ for(const m of marks){
+  if(m<st||m>=N)continue;
+  const x=pad.l+((m-st)/(show-1))*pw;
+  sx.beginPath();sx.moveTo(x,pad.t);sx.lineTo(x,pad.t+ph);sx.stroke();
+  sx.fillStyle='#c084fc';sx.font='11px monospace';sx.fillText('📍',x-6,pad.t+ph-3);
+ }
+
+ hud.innerHTML=`${fps.toFixed(0)}fps · ${show}pt · ±${fmt(yr)}<br>${secs}с окно`;
+
+ // статистика
+ if($('p5').classList.contains('open')){
+  let s='';
+  for(const c of act){
+   const a=proc[c.k];
+   let mn=1e18,mx=-1e18,ss=0;
+   for(let i=st;i<N;i++){const v=a[i];if(v<mn)mn=v;if(v>mx)mx=v;ss+=v*v}
+   const rms=Math.sqrt(ss/show);
+   s+=`<span style="color:${c.col}">${c.name.padEnd(6)}</span> p2p=${fmt(mx-mn)}  rms=${fmt(rms)}<br>`;
+  }
+  statBox.innerHTML=s;
+ }
 }
 </script>
 </body>
