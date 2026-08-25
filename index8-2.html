@@ -51,6 +51,29 @@ button.sm:hover{background:#4b5563}
  <canvas id="ov" width="340" height="200"></canvas>
 </div>
 
+ <!-- Осциллограф -->
+<div class="scope">
+ <canvas id="scopeCanvas"></canvas>
+ <div class="scope-info">
+  <span id="siLeft">--</span>
+  <span id="siCenter">--</span>
+  <span id="siRight">--</span>
+ </div>
+</div>
+
+<!-- Статус -->
+<div class="status">
+ <span id="stFPS">FPS: --</span>
+ <span id="stSamples">Буфер: 0</span>
+ <span id="stSkin">Кожа: --</span>
+ <span id="stRaw">R:-- G:-- B:--</span>
+</div>
+
+<div class="ctr">
+ <button id="bOn">▶ Старт</button>
+ <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
+</div>
+
 <!-- Каналы -->
 <div class="panel">
  <div class="panel-title">📺 Каналы</div>
@@ -101,7 +124,7 @@ button.sm:hover{background:#4b5563}
  <div class="panel-title">📐 Масштаб и отображение</div>
  <div class="panel-row">
   <label>Масштаб Y:
-   <input type="range" id="slScale" min="1" max="500" value="100">
+   <input type="range" id="slScale" min="1" max="900" value="100">
    <span class="val" id="vScale">×1.0</span>
   </label>
   <label><input type="checkbox" id="chAutoY" checked> Авто Y</label>
@@ -140,29 +163,6 @@ button.sm:hover{background:#4b5563}
    <span class="val" id="vRoiH">50%</span>
   </label>
  </div>
-</div>
-
-<!-- Осциллограф -->
-<div class="scope">
- <canvas id="scopeCanvas"></canvas>
- <div class="scope-info">
-  <span id="siLeft">--</span>
-  <span id="siCenter">--</span>
-  <span id="siRight">--</span>
- </div>
-</div>
-
-<!-- Статус -->
-<div class="status">
- <span id="stFPS">FPS: --</span>
- <span id="stSamples">Буфер: 0</span>
- <span id="stSkin">Кожа: --</span>
- <span id="stRaw">R:-- G:-- B:--</span>
-</div>
-
-<div class="ctr">
- <button id="bOn">▶ Старт</button>
- <button id="bOff" class="off" style="display:none">⏹ Стоп</button>
 </div>
 
 <script>
