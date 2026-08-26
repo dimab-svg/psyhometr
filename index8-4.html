@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>rPPG v10 — Трекинг точек</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080a12;color:#d1d5db;font-family:-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:4px}
+h1{font-size:.95rem;color:#38bdf8;margin-bottom:1px}
+.sub{font-size:.6rem;color:#6b7280;margin-bottom:4px;text-align:center}
+.cam{position:relative;width:340px;height:220px;background:#000;border-radius:6px;overflow:hidden;border:2px solid #1e293b;touch-action:none}
+video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+canvas.gc{width:340px;height:180px;background:#060a12;border:1px solid #1e293b;border-radius:5px;display:block;margin-top:3px}
+.quick{width:340px;display:flex;gap:3px;margin-top:3px;flex-wrap:wrap}
+.quick button{padding:5px 8px;font-size:.65rem;border:none;border-radius:3px;background:#1e293b;color:#d1d5db;font-weight:600;cursor:pointer}
+.quick button.p{background:#0284c7;color:#fff}
+.quick button.m{background:#7c3aed;color:#fff}
+.quick button.o{background:#dc2626;color:#fff}
+.pn{width:340px;background:#0f1523;border:1px solid #1e293b;border-radius:5px;margin-top:3px;overflow:hidden}
+.ph{padding:4px 8px;font-size:.65rem;color:#94a3b8;cursor:pointer;display:flex;justify-content:space-between;background:#131b2e}
+.pb{padding:5px 8px;display:none}
+.pb.open{display:block}
+.pr{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px}
+label{font-size:.65rem;display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap}
+input[type=checkbox]{accent-color:#38bdf8;width:12px;height:12px}
+input[type=range]{width:80px;height:4px;accent-color:#38bdf8}
+.v{font-size:.58rem;color:#64748b;min-width:40px;text-align:right;font-family:monospace}
+.hint{font-size:.55rem;color:#475569;line-height:1.2;margin-top:2px}
+.stat{width:340px;background:#111827;border:1px solid #1e293b;border-radius:4px;margin-top:3px;padding:4px 8px;font-size:.6rem;font-family:monospace;color:#94a3b8;line-height:1.4}
+</style>
+</head>
+<body>
+<h1>🔬 rPPG v10 — Трекинг точек</h1>
+<div class="sub">Отслеживание пикселей при движении · Компенсация тряски · DIV канал</div>
+
+<div class="cam" id="camBox">
+ <video id="vid" autoplay playsinline muted></video>
+ <canvas id="ov" width="340" height="220"></canvas>
+</div>
+<canvas id="scope" class="gc"></canvas>
+
+<div class="quick">
+ <button id="bOn" class="p">▶ Старт</button>
+ <button id="bOff" class="o" style="display:none">⏹</button>
+ <button id="bMark" class="m">📍 Метка</button>
+ <button id="bFreeze">⏸</button>
+ <button id="bClear">🗑</button>
+ <button id="bReinit">🔄 Точки</button>
+</div>
+
+<div class="pn">
+ <div class="ph" data-t="p1">📺 Каналы / Масштаб <span>▾</span></div>
+ <div class="pb open" id="p1">
+  <div class="pr">
+   <label style="color:#ff5555"><input type="checkbox" id="cR" checked>R</label>
+   <label style="color:#55ff77"><input type="checkbox" id="cG" checked>G</label>
+   <label style="color:#5599ff"><input type="checkbox" id="cB" checked>B</label>
+   <label style="color:#ffdd44"><input type="checkbox" id="cDIV" checked>DIV</label>
+   <label style="color:#888"><input type="checkbox" id="cMOT">Движ</label>
+  </div>
+  <div class="pr">
+   <label>Y:<input type="range" id="sY" min="0" max="100" value="40"><span class="v" id="vY"></span></label>
+   <label>Время:<input type="range" id="sT" min="3" max="30" value="10"><span class="v" id="vT"></span></label>
+  </div>
+  <div class="pr">
+   <label><input type="checkbox" id="cSplit">Раздельно</label>
+   <label><input type="checkbox" id="cGrid" checked>Сетка</label>
+   <label><input type="checkbox" id="cAuto">Авто Y</label>
+  </div>
+ </div>
+</div>
+
+<div class="pn">
+ <div class="ph" data-t="p2">🎯 Трекинг <span>▾</span></div>
+ <div class="pb open" id="p2">
+  <div class="pr">
+   <label>Точек:<input type="range" id="sNP" min="8" max="80" value="30"><span class="v" id="vNP"></span></label>
+   <label>Патч:<input type="range" id="sPatch" min="3" max="11" value="7" step="2"><span class="v" id="vPatch"></span></label>
+  </div>
+  <div class="pr">
+   <label>Поиск (px):<input type="range" id="sSearch" min="2" max="12" value="5"><span class="v" id="vSearch"></span></label>
+   <label>Обновл (с):<input type="range" id="sReinit" min="1" max="10" value="3"><span class="v" id="vReinit"></span></label>
+  </div>
+  <div class="pr">
+   <label><input type="checkbox" id="cShowPts" checked>Показать точки</label>
+   <label><input type="checkbox" id="cCompare">+ Без трекинга</label>
+  </div>
+  <div class="hint">Зелёные точки = отслеживаемые пиксели. Они «следуют» за кожей при микродвижениях. Цвет измеряется в их позициях. «Без трекинга» показывает что было бы при фиксированном ROI (для сравнения).</div>
+ </div>
+</div>
+
+<div class="pn">
+ <div class="ph" data-t="p3">🔧 Фильтры <span>▾</span></div>
+ <div class="pb" id="p3">
+  <div class="pr">
+   <label><input type="checkbox" id="cHP" checked>Убрать DC</label>
+   <label>Срез:<input type="range" id="sHP" min="1" max="100" value="10"><span class="v" id="vHP"></span></label>
+  </div>
+ </div>
+</div>
+
+<div class="stat" id="stat">--</div>
+
+<script>
+const CW=340,CH=220,MAXB=3000;
+let on=false,stm=null,raf=null,frozen=false;
+let fc=0,ft0=0,fps=25;
+let marks=[],needReinit=true,lastReinitT=0;
+
+// ===== Трекер =====
+let trackedPts=[]; // [{x,y,patch:Uint8Array}]
+let prevGray=null; // полный кадр в градациях серого
+
+// Буферы (отфильтрованные — только вперёд)
+const KEYS=['R','G','B','DIV','MOT','fR','fG','fB','fDIV'];
+const buf={}; KEYS.forEach(k=>buf[k]=[]);
+const fst={}; ['R','G','B','DIV','fR','fG','fB','fDIV'].forEach(k=>fst[k]={v:0,init:false});
+
+const vid=document.getElementById('vid'),ov=document.getElementById('ov'),oc=ov.getContext('2d');
+const scope=document.getElementById('scope'),sx=scope.getContext('2d');
+const stat=document.getElementById('stat');
+const hc=document.createElement('canvas');hc.width=CW;hc.height=CH;
+const hx=hc.getContext('2d',{willReadFrequently:true});
+const $=id=>document.getElementById(id);
+
+// ROI — центральная часть, фиксированная
+const ROI={x:.15,y:.08,w:.70,h:.70};
+
+// Аккордеоны
+document.querySelectorAll('.ph').forEach(h=>h.onclick=()=>{
+ const b=$(h.dataset.t);b.classList.toggle('open');
+ h.querySelector('span').textContent=b.classList.contains('open')?'▾':'▸';
+});
+
+// Слайдеры
+function yRange(){return 10*Math.pow(10,-(+$('sY').value/100)*5.5)}
+function upd(){
+ $('vY').textContent='±'+fmt(yRange());
+ $('vT').textContent=$('sT').value+'с';
+ $('vNP').textContent=$('sNP').value;
+ $('vPatch').textContent=$('sPatch').value+'×'+$('sPatch').value;
+ $('vSearch').textContent='±'+$('sSearch').value;
+ $('vReinit').textContent=$('sReinit').value+'с';
+ $('vHP').textContent=(+$('sHP').value/100).toFixed(2)+'Гц';
+}
+['sY','sT','sNP','sPatch','sSearch','sReinit','sHP'].forEach(id=>$(id).oninput=upd);
+upd();
+
+$('bOn').onclick=start;$('bOff').onclick=stop;
+$('bFreeze').onclick=e=>{frozen=!frozen;e.target.textContent=frozen?'▶':'⏸'};
+$('bClear').onclick=()=>{KEYS.forEach(k=>buf[k]=[]);marks=[];Object.values(fst).forEach(s=>{s.init=false})};
+$('bMark').onclick=()=>marks.push(buf.R.length);
+$('bReinit').onclick=()=>needReinit=true;
+
+async function start(){
+ try{
+  stm=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+  vid.srcObject=stm;await vid.play();
+  KEYS.forEach(k=>buf[k]=[]);marks=[];trackedPts=[];prevGray=null;needReinit=true;
+  Object.values(fst).forEach(s=>{s.init=false});
+  on=true;fc=0;ft0=performance.now();
+  $('bOn').style.display='none';$('bOff').style.display='';
+  loop();
+ }catch(e){alert(e.message)}
+}
+function stop(){
+ on=false;setTimeout(()=>{if(stm){stm.getTracks().forEach(t=>t.stop());stm=null}
+  vid.srcObject=null;$('bOn').style.display='';$('bOff').style.display='none'},80);
+}
+
+// ===== Утилиты =====
+function toGray(px,w,h){
+ const g=new Float32Array(w*h);
+ for(let i=0;i<w*h;i++)g[i]=px[i*4]*.299+px[i*4+1]*.587+px[i*4+2]*.114;
+ return g;
+}
+
+function getPixel(gray,x,y,w,h){
+ x=Math.max(0,Math.min(w-1,Math.round(x)));
+ y=Math.max(0,Math.min(h-1,Math.round(y)));
+ return gray[y*w+x];
+}
+
+// ===== Детектор хороших точек (Shi-Tomasi / Harris corners) =====
+function findGoodPoints(gray,w,h,roi,maxPts){
+ const rx=Math.floor(w*roi.x),ry=Math.floor(h*roi.y);
+ const rw=Math.floor(w*roi.w),rh=Math.floor(h*roi.h);
+ const scores=[];
+
+ // Градиенты + структурная матрица
+ for(let y=ry+2;y<ry+rh-2;y+=3){
+  for(let x=rx+2;x<rx+rw-2;x+=3){
+   let Ixx=0,Iyy=0,Ixy=0;
+   for(let dy=-1;dy<=1;dy++){
+    for(let dx=-1;dx<=1;dx++){
+     const gx=getPixel(gray,x+dx+1,y+dy,w,h)-getPixel(gray,x+dx-1,y+dy,w,h);
+     const gy=getPixel(gray,x+dx,y+dy+1,w,h)-getPixel(gray,x+dx,y+dy-1,w,h);
+     Ixx+=gx*gx;Iyy+=gy*gy;Ixy+=gx*gy;
+    }
+   }
+   // Shi-Tomasi: min eigenvalue
+   const trace=Ixx+Iyy;
+   const det=Ixx*Iyy-Ixy*Ixy;
+   const disc=Math.sqrt(Math.max(0,trace*trace/4-det));
+   const minEig=trace/2-disc;
+   if(minEig>50) scores.push({x,y,score:minEig});
+  }
+ }
+
+ // Сортировка по силе, берём maxPts
+ scores.sort((a,b)=>b.score-a.score);
+
+ // Non-maximum suppression: минимум 8px между точками
+ const pts=[];
+ const minDist=8;
+ for(const s of scores){
+  if(pts.length>=maxPts)break;
+  let tooClose=false;
+  for(const p of pts){
+   if(Math.abs(p.x-s.x)<minDist&&Math.abs(p.y-s.y)<minDist){tooClose=true;break}
+  }
+  if(!tooClose) pts.push({x:s.x,y:s.y});
+ }
+
+ return pts;
+}
+
+// ===== Трекинг одной точки (template matching) =====
+function trackPoint(pt,prevGray,curGray,w,h,patchR,searchR){
+ const ps=patchR; // полуразмер патча
+ const sr=searchR;
+
+ // Извлекаем патч из предыдущего кадра
+ let bestDx=0,bestDy=0,bestSAD=Infinity;
+
+ for(let dy=-sr;dy<=sr;dy++){
+  for(let dx=-sr;dx<=sr;dx++){
+   let sad=0;
+   for(let py=-ps;py<=ps;py++){
+    for(let px=-ps;px<=ps;px++){
+     const prev=getPixel(prevGray,pt.x+px,pt.y+py,w,h);
+     const cur=getPixel(curGray,pt.x+dx+px,pt.y+dy+py,w,h);
+     sad+=Math.abs(prev-cur);
+    }
+   }
+   if(sad<bestSAD){bestSAD=sad;bestDx=dx;bestDy=dy}
+  }
+ }
+
+ const patchSize=(2*ps+1)*(2*ps+1);
+ const avgSAD=bestSAD/patchSize;
+
+ return {x:pt.x+bestDx, y:pt.y+bestDy, quality:avgSAD};
+}
+
+// ===== Причинный ВЧ-фильтр =====
+function hpFilt(key,val){
+ const s=fst[key];
+ if(!s.init){s.v=val;s.init=true;return 0}
+ const a=1-Math.exp(-2*Math.PI*(+$('sHP').value/100)/Math.max(fps,5));
+ s.v=s.v*(1-a)+val*a;
+ return val-s.v;
+}
+
+function fmt(v){const a=Math.abs(v);if(a>=1)return v.toFixed(2);if(a>=.01)return v.toFixed(4);return v.toExponential(1)}
+
+// ===== ГЛАВНЫЙ ЦИКЛ =====
+function loop(){
+ if(!on)return;
+ try{
+  const now=performance.now();fc++;
+  if(now-ft0>1500){fps=Math.max(5,fc/((now-ft0)/1000));fc=0;ft0=now}
+
+  hx.drawImage(vid,0,0,CW,CH);
+  const img=hx.getImageData(0,0,CW,CH);
+  const px=img.data;
+  const curGray=toGray(px,CW,CH);
+
+  const nPts=+$('sNP').value;
+  const patchR=Math.floor(+$('sPatch').value/2);
+  const searchR=+$('sSearch').value;
+  const reinitSec=+$('sReinit').value;
+
+  // Инициализация / переинициализация точек
+  if(needReinit || !trackedPts.length || (now-lastReinitT>reinitSec*1000)){
+   trackedPts=findGoodPoints(curGray,CW,CH,ROI,nPts);
+   lastReinitT=now;
+   needReinit=false;
+  }
+
+  // Трекинг
+  let motionSum=0;
+  if(prevGray && trackedPts.length>0){
+   const newPts=[];
+   for(const pt of trackedPts){
+    const res=trackPoint(pt,prevGray,curGray,CW,CH,patchR,searchR);
+    // Отбраковываем плохие (высокий SAD = точка потеряна)
+    if(res.quality<30){
+     motionSum+=Math.abs(res.x-pt.x)+Math.abs(res.y-pt.y);
+     newPts.push({x:res.x,y:res.y});
+    }
+   }
+   if(newPts.length>nPts*0.3) trackedPts=newPts;
+   else needReinit=true; // потеряли слишком много точек
+  }
+
+  // Измеряем цвет В ОТСЛЕЖИВАЕМЫХ ТОЧКАХ
+  let sR=0,sG=0,sB=0,cnt=0;
+  for(const pt of trackedPts){
+   const ix=Math.round(pt.x),iy=Math.round(pt.y);
+   if(ix<0||ix>=CW||iy<0||iy>=CH)continue;
+   const i=(iy*CW+ix)*4;
+   sR+=px[i];sG+=px[i+1];sB+=px[i+2];cnt++;
+  }
+
+  // Фиксированный ROI (для сравнения «без трекинга»)
+  let fR=0,fG=0,fB=0,fCnt=0;
+  if($('cCompare').checked){
+   const rx=Math.floor(CW*ROI.x),ry=Math.floor(CH*ROI.y);
+   const rw=Math.floor(CW*ROI.w),rh=Math.floor(CH*ROI.h);
+   for(let y=ry;y<ry+rh;y+=3)for(let x=rx;x<rx+rw;x+=3){
+    const i=(y*CW+x)*4;fR+=px[i];fG+=px[i+1];fB+=px[i+2];fCnt++;
+   }
+  }
+
+  prevGray=curGray;
+
+  if(!frozen && cnt>3){
+   const avgR=sR/cnt,avgG=sG/cnt,avgB=sB/cnt;
+   const div=avgR-(avgG+avgB)/2;
+   const mot=trackedPts.length>0?motionSum/trackedPts.length:0;
+   const useHP=$('cHP').checked;
+
+   buf.R.push(useHP?hpFilt('R',avgR):avgR);
+   buf.G.push(useHP?hpFilt('G',avgG):avgG);
+   buf.B.push(useHP?hpFilt('B',avgB):avgB);
+   buf.DIV.push(useHP?hpFilt('DIV',div):div);
+   buf.MOT.push(mot);
+
+   if(fCnt>3){
+    const fr=fR/fCnt,fg=fG/fCnt,fb=fB/fCnt;
+    buf.fR.push(useHP?hpFilt('fR',fr):fr);
+    buf.fG.push(useHP?hpFilt('fG',fg):fg);
+    buf.fB.push(useHP?hpFilt('fB',fb):fb);
+    buf.fDIV.push(useHP?hpFilt('fDIV',fr-(fg+fb)/2):fr-(fg+fb)/2);
+   }
+
+   KEYS.forEach(k=>{while(buf[k].length>MAXB)buf[k].shift()});
+  }
+
+  drawOverlay();
+  if(fc%2===0)drawScope();
+
+  // Статистика
+  stat.textContent=`${fps.toFixed(0)}fps · ${trackedPts.length}/${nPts} точек · buf:${buf.R.length}`;
+
+ }catch(e){console.error(e)}
+ raf=requestAnimationFrame(loop);
+}
+
+function drawOverlay(){
+ oc.clearRect(0,0,CW,CH);
+ // ROI рамка (слабая)
+ const rx=Math.floor(CW*ROI.x),ry=Math.floor(CH*ROI.y);
+ const rw=Math.floor(CW*ROI.w),rh=Math.floor(CH*ROI.h);
+ oc.strokeStyle='rgba(34,197,94,.25)';oc.lineWidth=1;oc.setLineDash([4,4]);
+ oc.strokeRect(rx,ry,rw,rh);oc.setLineDash([]);
+
+ // Точки
+ if($('cShowPts').checked){
+  oc.fillStyle='rgba(34,197,94,.7)';
+  for(const pt of trackedPts){
+   oc.beginPath();oc.arc(pt.x,pt.y,2,0,Math.PI*2);oc.fill();
+  }
+ }
+ // Инфо
+ oc.fillStyle='rgba(34,197,94,.6)';oc.font='9px monospace';
+ oc.fillText(`${trackedPts.length} точек`,rx+3,ry-3);
+}
+
+function drawScope(){
+ const w=scope.width=scope.clientWidth*2,h=scope.height=scope.clientHeight*2;
+ sx.clearRect(0,0,w,h);sx.fillStyle='#060a12';sx.fillRect(0,0,w,h);
+
+ const chs=[];
+ if($('cR').checked)chs.push({k:'R',c:'#ff5555'});
+ if($('cG').checked)chs.push({k:'G',c:'#55ff77'});
+ if($('cB').checked)chs.push({k:'B',c:'#5599ff'});
+ if($('cDIV').checked)chs.push({k:'DIV',c:'#ffdd44'});
+ if($('cMOT').checked)chs.push({k:'MOT',c:'#888'});
+
+ // Сравнение без трекинга
+ if($('cCompare').checked){
+  if($('cR').checked)chs.push({k:'fR',c:'#993333',dash:true});
+  if($('cG').checked)chs.push({k:'fG',c:'#339944',dash:true});
+  if($('cB').checked)chs.push({k:'fB',c:'#334499',dash:true});
+  if($('cDIV').checked)chs.push({k:'fDIV',c:'#997722',dash:true});
+ }
+
+ if(!chs.length||buf.R.length<3){
+  sx.fillStyle='#334155';sx.font='14px sans-serif';sx.fillText('нет данных',20,h/2);return}
+
+ const N=buf.R.length;
+ const secs=+$('sT').value;
+ const show=Math.min(N,Math.max(10,Math.round(fps*secs)));
+ const st=N-show;
+ const pad={l:6,r:6,t:6,b:6},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
+ const split=$('cSplit').checked;
+ const drawChs=chs.filter(c=>buf[c.k]&&buf[c.k].length>=N);
+ const lanes=split?drawChs.length:1;
+ const lnH=ph/Math.max(lanes,1);
+
+ let yr=yRange();
+ if($('cAuto').checked){
+  let m=0;
+  for(const c of drawChs)for(let i=st;i<N;i++){
+   if(buf[c.k][i]!==undefined){const v=Math.abs(buf[c.k][i]);if(v>m)m=v}
+  }
+  yr=m>0?m*1.3:1;
+ }
+
+ // Сетка
+ if($('cGrid').checked){
+  sx.strokeStyle='rgba(255,255,255,.05)';sx.lineWidth=1;
+  for(let s=1;s<secs;s++){
+   const x=pad.l+pw-s*fps/show*pw;if(x<pad.l)break;
+   sx.beginPath();sx.moveTo(x,pad.t);sx.lineTo(x,pad.t+ph);sx.stroke();
+  }
+ }
+
+ drawChs.forEach((c,li)=>{
+  const top=pad.t+(split?li:0)*lnH;
+  const mid=top+lnH/2;
+  const arr=buf[c.k];if(!arr||arr.length<N)return;
+  const isMot=c.k==='MOT';
+  let motMax=1;if(isMot)for(let i=st;i<N;i++)if(arr[i]>motMax)motMax=arr[i];
+
+  // Нулевая
+  if(!isMot){
+   sx.strokeStyle='rgba(255,255,255,.08)';sx.lineWidth=1;sx.setLineDash([5,5]);
+   sx.beginPath();sx.moveTo(pad.l,mid);sx.lineTo(pad.l+pw,mid);sx.stroke();sx.setLineDash([]);
+  }
+
+  sx.beginPath();sx.strokeStyle=c.c;sx.lineWidth=c.dash?1:1.6;
+  if(c.dash)sx.setLineDash([4,3]);
+  for(let i=st;i<N;i++){
+   const x=pad.l+((i-st)/(show-1))*pw;
+   let y;
+   if(isMot)y=top+lnH-(arr[i]/motMax)*lnH*.9;
+   else y=mid-(arr[i]/yr)*(lnH/2*.9);
+   y=Math.max(top+1,Math.min(top+lnH-1,y));
+   i===st?sx.moveTo(x,y):sx.lineTo(x,y);
+  }
+  sx.stroke();sx.setLineDash([]);
+
+  sx.fillStyle=c.c;sx.font='bold 11px monospace';
+  const last=arr[N-1];
+  const label=c.dash?c.k+' (fix)':c.k;
+  sx.fillText(label+' '+fmt(last??0),pad.l+4,top+13);
+ });
+
+ // Метки
+ sx.strokeStyle='#c084fc';sx.lineWidth=2;
+ for(const m of marks){
+  if(m<st||m>=N)continue;
+  const x=pad.l+((m-st)/(show-1))*pw;
+  sx.beginPath();sx.moveTo(x,pad.t);sx.lineTo(x,pad.t+ph);sx.stroke();
+  sx.fillStyle='#c084fc';sx.font='10px sans-serif';sx.fillText('📍',x-5,pad.t+ph-2);
+ }
+}
+</script>
+</body>
+</html>
