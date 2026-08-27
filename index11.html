@@ -3,18 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🧠 Стрессометр</title>
+    <title>🧠 Стрессометр v2</title>
 
-    <!-- MediaPipe Face Mesh — ИИ от Google, ищет лицо -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             background: #1a1a2e;
@@ -27,31 +22,24 @@
             padding: 10px;
         }
 
-        h1 {
-            font-size: 1.4em;
-            margin: 10px 0;
-        }
+        h1 { font-size: 1.4em; margin: 10px 0; }
 
         .video-container {
             position: relative;
-            width: 320px;
-            height: 240px;
+            width: 320px; height: 240px;
             border-radius: 12px;
             overflow: hidden;
             border: 2px solid #444;
         }
 
         video, .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
         }
 
         video {
             object-fit: cover;
-            transform: scaleX(-1); /* зеркало */
+            transform: scaleX(-1);
         }
 
         .overlay {
@@ -62,9 +50,7 @@
         .metrics {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin: 15px 0;
-            width: 320px;
+            gap: 10px; margin: 15px 0; width: 320px;
         }
 
         .metric-card {
@@ -75,60 +61,37 @@
             border: 1px solid #333;
         }
 
-        .metric-card.wide {
-            grid-column: 1 / -1;
-        }
-
-        .metric-value {
-            font-size: 2em;
-            font-weight: bold;
-            margin: 5px 0;
-        }
-
-        .metric-label {
-            font-size: 0.8em;
-            color: #888;
-        }
-
+        .metric-card.wide { grid-column: 1 / -1; }
+        .metric-value { font-size: 2em; font-weight: bold; margin: 5px 0; }
+        .metric-label { font-size: 0.8em; color: #888; }
         .pulse-color { color: #e74c3c; }
         .hrv-color { color: #3498db; }
         .stress-color { color: #f39c12; }
 
         .stress-bar {
-            width: 100%;
-            height: 20px;
-            background: #333;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 5px;
+            width: 100%; height: 20px;
+            background: #333; border-radius: 10px;
+            overflow: hidden; margin-top: 5px;
         }
 
         .stress-fill {
-            height: 100%;
-            border-radius: 10px;
+            height: 100%; border-radius: 10px;
             transition: width 1s ease, background-color 1s ease;
         }
 
         .chart-container {
-            width: 320px;
-            height: 120px;
+            width: 320px; height: 120px;
             background: #16213e;
             border-radius: 10px;
             border: 1px solid #333;
-            overflow: hidden;
-            margin: 5px 0;
+            overflow: hidden; margin: 5px 0;
         }
 
-        canvas.chart {
-            width: 100%;
-            height: 100%;
-        }
+        canvas.chart { width: 100%; height: 100%; }
 
         .status {
-            font-size: 0.85em;
-            color: #888;
-            margin: 5px;
-            text-align: center;
+            font-size: 0.85em; color: #888;
+            margin: 5px; text-align: center;
         }
 
         .status.active { color: #2ecc71; }
@@ -136,14 +99,10 @@
         .status.error { color: #e74c3c; }
 
         #startBtn {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            margin: 10px;
+            background: #e74c3c; color: white;
+            border: none; padding: 12px 30px;
+            border-radius: 8px; font-size: 1.1em;
+            cursor: pointer; margin: 10px;
         }
 
         #startBtn:hover { background: #c0392b; }
@@ -152,16 +111,22 @@
             background: #16213e;
             border: 1px solid #444;
             border-radius: 8px;
-            padding: 10px;
-            margin: 10px 0;
-            width: 320px;
-            font-size: 0.8em;
-            color: #aaa;
+            padding: 10px; margin: 10px 0;
+            width: 320px; font-size: 0.8em; color: #aaa;
+        }
+
+        .debug {
+            background: #0d1117;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px; margin: 5px 0;
+            width: 320px; font-size: 0.7em;
+            color: #666; font-family: monospace;
         }
     </style>
 </head>
 <body>
-    <h1>🧠 Стрессометр</h1>
+    <h1>🧠 Стрессометр v2</h1>
 
     <div class="video-container">
         <video id="video" playsinline></video>
@@ -197,63 +162,54 @@
     <div class="chart-container">
         <canvas class="chart" id="convergenceChart" width="320" height="120"></canvas>
     </div>
-    <p class="status">📊 Стабильность сигнала</p>
+    <p class="status">📊 Диагностика</p>
 
     <div class="tip">
         💡 <strong>Советы для точности:</strong><br>
         • Сидите неподвижно, лицо в центре камеры<br>
-        • Равномерное освещение на лицо (без бликов)<br>
-        • Подождите 15–20 секунд для стабилизации<br>
+        • Равномерное освещение спереди (не сбоку, не сзади)<br>
+        • Подождите 10–15 секунд для стабилизации<br>
         • Не разговаривайте во время измерения
     </div>
 
+    <div class="debug" id="debugInfo">Отладка: ожидание...</div>
+
     <script>
     // ============================================================
-    //  ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+    //  НАСТРОЙКИ
     // ============================================================
 
     const VIDEO_W = 320, VIDEO_H = 240;
-    const TARGET_FPS = 30;
-    const BUFFER_SECONDS = 10;
-    const BUFFER_SIZE = TARGET_FPS * BUFFER_SECONDS; // 300 отсчётов
+    const BUFFER_SECONDS = 8;
+    const BUFFER_SIZE = 240; // ~8 сек при 30 fps
 
-    // Кольцевые буферы для RGB со лба
+    // Буферы
     let bufR = [], bufG = [], bufB = [];
     let bufTimestamps = [];
 
     // Результаты
     let currentBPM = 0;
     let currentHRV = 0;
-    let currentStress = 0;
+    let currentStress = -1; // -1 = ещё не вычислен
     let ppgSignalForChart = [];
+    let bpmHistory = [];
 
     // Состояние
-    let isRunning = false;
-    let faceDetected = false;
     let framesProcessed = 0;
 
     // ============================================================
-    //  ИНДЕКСЫ ТОЧЕК ЛИЦА (MediaPipe Face Mesh)
-    //  — зона лба, где кожа ближе к поверхности
+    //  ТОЧКИ ЛИЦА
     // ============================================================
 
-    // Точки на лбу (между бровями и линией волос)
-    const FOREHEAD_INDICES = [
-        10, 338, 297, 332, 284, 251, 389, 356,
-        454, 323, 361, 288, 397, 365, 379, 378,
-        400, 377, 152, 148, 176, 149, 150, 136,
-        172, 58, 132, 93, 234, 127, 162, 21,
-        54, 103, 67, 109
-    ];
+    // Лоб (центральная часть — самая надёжная зона)
+    const FOREHEAD = [10, 67, 69, 104, 108, 109, 151, 299, 297, 333, 337, 338];
 
-    // Точки на левой щеке
-    const LEFT_CHEEK = [123, 187, 207, 206, 203, 142, 126, 217, 174, 196];
-
-    // Точки на правой щеке
-    const RIGHT_CHEEK = [352, 411, 427, 426, 423, 371, 355, 437, 399, 419];
+    // Щёки
+    const LEFT_CHEEK = [50, 101, 116, 117, 118, 119, 123, 187, 206, 203];
+    const RIGHT_CHEEK = [280, 330, 345, 346, 347, 348, 352, 411, 426, 423];
 
     // ============================================================
-    //  ЗАПУСК ПРИЛОЖЕНИЯ
+    //  ЗАПУСК
     // ============================================================
 
     async function startApp() {
@@ -262,22 +218,16 @@
 
         try {
             await initFaceMesh();
-            setStatus('Камера и ИИ готовы. Наведите лицо в камеру.', 'active');
-            isRunning = true;
-
-            // Запускаем отрисовку графиков
+            setStatus('✅ Камера готова. Наведите лицо.', 'active');
             requestAnimationFrame(drawCharts);
-
-            // Запускаем расчёт пульса каждую секунду
             setInterval(computeVitals, 1000);
         } catch (e) {
             setStatus('Ошибка: ' + e.message, 'error');
-            console.error(e);
         }
     }
 
     // ============================================================
-    //  ИНИЦИАЛИЗАЦИЯ MEDIAPIPE FACE MESH
+    //  MEDIAPIPE FACE MESH
     // ============================================================
 
     async function initFaceMesh() {
@@ -295,9 +245,8 @@
             minTrackingConfidence: 0.5
         });
 
-        faceMesh.onResults(onFaceMeshResults);
+        faceMesh.onResults(onResults);
 
-        // Запуск камеры
         const camera = new Camera(videoEl, {
             onFrame: async () => {
                 await faceMesh.send({ image: videoEl });
@@ -311,48 +260,45 @@
     }
 
     // ============================================================
-    //  ОБРАБОТКА КАЖДОГО КАДРА (вызывается ~30 раз/сек)
+    //  КАЖДЫЙ КАДР
     // ============================================================
 
-    function onFaceMeshResults(results) {
+    function onResults(results) {
         const canvas = document.getElementById('overlay');
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, VIDEO_W, VIDEO_H);
 
         if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-            faceDetected = false;
-            setStatus('😐 Лицо не найдено. Наведите камеру на лицо.', 'warning');
+            setStatus('😐 Лицо не найдено', 'warning');
             return;
         }
 
-        faceDetected = true;
         framesProcessed++;
-
         const landmarks = results.multiFaceLandmarks[0];
 
-        // Получаем пиксели видео через скрытый canvas
+        // Получаем пиксели
         const vidCanvas = document.createElement('canvas');
         vidCanvas.width = VIDEO_W;
         vidCanvas.height = VIDEO_H;
         const vidCtx = vidCanvas.getContext('2d');
         vidCtx.drawImage(document.getElementById('video'), 0, 0, VIDEO_W, VIDEO_H);
-        const imageData = vidCtx.getImageData(0, 0, VIDEO_W, VIDEO_H);
-        const pixels = imageData.data;
+        const pixels = vidCtx.getImageData(0, 0, VIDEO_W, VIDEO_H).data;
 
-        // Собираем средний цвет со всех зон кожи
-        const allSkinIndices = [...FOREHEAD_INDICES, ...LEFT_CHEEK, ...RIGHT_CHEEK];
+        // Собираем цвет кожи из всех зон
+        const allIndices = [...FOREHEAD, ...LEFT_CHEEK, ...RIGHT_CHEEK];
         let sumR = 0, sumG = 0, sumB = 0, count = 0;
 
-        for (const idx of allSkinIndices) {
+        for (const idx of allIndices) {
             const lm = landmarks[idx];
-            const x = Math.round(lm.x * VIDEO_W);
-            const y = Math.round(lm.y * VIDEO_H);
+            if (!lm) continue;
+            const cx = Math.round(lm.x * VIDEO_W);
+            const cy = Math.round(lm.y * VIDEO_H);
 
-            // Берём маленький квадрат 3x3 вокруг каждой точки
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    const px = x + dx;
-                    const py = y + dy;
+            // Квадрат 5x5 вокруг каждой точки (больше пикселей = меньше шума)
+            for (let dy = -2; dy <= 2; dy++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                    const px = cx + dx;
+                    const py = cy + dy;
                     if (px >= 0 && px < VIDEO_W && py >= 0 && py < VIDEO_H) {
                         const i = (py * VIDEO_W + px) * 4;
                         sumR += pixels[i];
@@ -365,252 +311,285 @@
         }
 
         if (count > 0) {
-            const avgR = sumR / count;
-            const avgG = sumG / count;
-            const avgB = sumB / count;
-
-            bufR.push(avgR);
-            bufG.push(avgG);
-            bufB.push(avgB);
+            bufR.push(sumR / count);
+            bufG.push(sumG / count);
+            bufB.push(sumB / count);
             bufTimestamps.push(performance.now());
 
-            // Ограничиваем размер буфера
-            if (bufR.length > BUFFER_SIZE) {
-                bufR.shift();
-                bufG.shift();
-                bufB.shift();
-                bufTimestamps.shift();
+            while (bufR.length > BUFFER_SIZE) {
+                bufR.shift(); bufG.shift(); bufB.shift(); bufTimestamps.shift();
             }
         }
 
-        // Рисуем зоны на лице (полупрозрачные)
-        drawFaceROI(ctx, landmarks, FOREHEAD_INDICES, 'rgba(0, 255, 0, 0.15)');
-        drawFaceROI(ctx, landmarks, LEFT_CHEEK, 'rgba(0, 200, 255, 0.15)');
-        drawFaceROI(ctx, landmarks, RIGHT_CHEEK, 'rgba(0, 200, 255, 0.15)');
+        // Рисуем точки на лице
+        drawDots(ctx, landmarks, FOREHEAD, 'rgba(0, 255, 100, 0.4)');
+        drawDots(ctx, landmarks, LEFT_CHEEK, 'rgba(100, 200, 255, 0.3)');
+        drawDots(ctx, landmarks, RIGHT_CHEEK, 'rgba(100, 200, 255, 0.3)');
 
-        if (bufR.length > 60) {
-            setStatus(`✅ Измерение... (${bufR.length}/${BUFFER_SIZE} отсчётов)`, 'active');
+        const pct = Math.round((bufR.length / BUFFER_SIZE) * 100);
+        if (bufR.length < 90) {
+            setStatus(`⏳ Накопление данных... ${pct}%`, 'warning');
         } else {
-            setStatus(`⏳ Накопление данных... (${bufR.length}/${BUFFER_SIZE})`, 'warning');
+            setStatus(`✅ Измерение активно (${bufR.length} отсчётов)`, 'active');
         }
     }
 
-    // ============================================================
-    //  РИСУЕМ ЗОНЫ НА ЛИЦЕ
-    // ============================================================
-
-    function drawFaceROI(ctx, landmarks, indices, color) {
+    function drawDots(ctx, landmarks, indices, color) {
         ctx.fillStyle = color;
-        ctx.strokeStyle = color.replace('0.15', '0.6');
-        ctx.lineWidth = 1;
-
         for (const idx of indices) {
-            const lm = landmarks[idx];
-            const x = lm.x * VIDEO_W;
-            const y = lm.y * VIDEO_H;
+            if (!landmarks[idx]) continue;
+            const x = landmarks[idx].x * VIDEO_W;
+            const y = landmarks[idx].y * VIDEO_H;
             ctx.beginPath();
-            ctx.arc(x, y, 2, 0, 2 * Math.PI);
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
     // ============================================================
-    //  АЛГОРИТМ CHROM (Chrominance-based rPPG)
-    //  — отделяет пульс от шума движения и света
+    //  АЛГОРИТМ CHROM (исправленный)
     // ============================================================
 
     function chromFilter(rawR, rawG, rawB) {
         const n = rawR.length;
         if (n < 30) return new Array(n).fill(0);
 
-        // Шаг 1: Нормализуем каждый канал (делим на среднее)
-        const meanR = rawR.reduce((a, b) => a + b) / n;
-        const meanG = rawG.reduce((a, b) => a + b) / n;
-        const meanB = rawB.reduce((a, b) => a + b) / n;
+        const result = new Array(n).fill(0);
 
-        const normR = rawR.map(v => v / (meanR || 1));
-        const normG = rawG.map(v => v / (meanG || 1));
-        const normB = rawB.map(v => v / (meanB || 1));
+        // Скользящее окно (1.5 секунды при 30fps = 45 кадров)
+        const winSize = 45;
 
-        // Шаг 2: CHROM — строим два сигнала
-        // Xs = 3R - 2G
-        // Ys = 1.5R + G - 1.5B
-        const Xs = [], Ys = [];
-        for (let i = 0; i < n; i++) {
-            Xs.push(3 * normR[i] - 2 * normG[i]);
-            Ys.push(1.5 * normR[i] + normG[i] - 1.5 * normB[i]);
-        }
+        for (let start = 0; start <= n - winSize; start++) {
+            const end = start + winSize;
 
-        // Шаг 3: Применяем скользящее окно
-        const winSize = Math.round(n * 0.5); // половина буфера
-        const pulse = new Array(n).fill(0);
+            // Среднее в окне
+            let mR = 0, mG = 0, mB = 0;
+            for (let i = start; i < end; i++) {
+                mR += rawR[i]; mG += rawG[i]; mB += rawB[i];
+            }
+            mR /= winSize; mG /= winSize; mB /= winSize;
 
-        for (let start = 0; start < n - winSize; start += Math.round(winSize / 4)) {
-            const end = Math.min(start + winSize, n);
-            const xWin = Xs.slice(start, end);
-            const yWin = Ys.slice(start, end);
+            // Нормализуем
+            const rn = [], gn = [], bn = [];
+            for (let i = start; i < end; i++) {
+                rn.push(rawR[i] / (mR || 1));
+                gn.push(rawG[i] / (mG || 1));
+                bn.push(rawB[i] / (mB || 1));
+            }
 
-            // Убираем тренд (линейную составляющую)
-            const xDetrended = detrend(xWin);
-            const yDetrended = detrend(yWin);
+            // CHROM-формула
+            const Xs = [], Ys = [];
+            for (let i = 0; i < winSize; i++) {
+                Xs.push(3 * rn[i] - 2 * gn[i]);
+                Ys.push(1.5 * rn[i] + gn[i] - 1.5 * bn[i]);
+            }
 
-            // Стандартное отклонение
-            const stdX = std(xDetrended) || 1;
-            const stdY = std(yDetrended) || 1;
+            // Убираем тренд
+            const xd = detrend(Xs);
+            const yd = detrend(Ys);
 
-            // Финальный сигнал CHROM: X + α * Y
+            const stdX = arrStd(xd) || 0.001;
+            const stdY = arrStd(yd) || 0.001;
             const alpha = stdX / stdY;
-            for (let i = 0; i < xDetrended.length; i++) {
-                pulse[start + i] += xDetrended[i] - alpha * yDetrended[i];
+
+            // Суммируем с перекрытием
+            for (let i = 0; i < winSize; i++) {
+                result[start + i] += (xd[i] - alpha * yd[i]) / winSize;
             }
         }
 
-        return pulse;
+        return result;
     }
 
     // ============================================================
-    //  ВЫЧИСЛЕНИЕ ПУЛЬСА И HRV
+    //  ВЫЧИСЛЕНИЕ ПУЛЬСА И HRV (исправленное)
     // ============================================================
 
     function computeVitals() {
-        if (bufR.length < 90) return; // нужно минимум 3 секунды
+        if (bufR.length < 90) return; // минимум ~3 сек
 
-        // 1. Применяем CHROM-фильтр
-        const pulse = chromFilter([...bufR], [...bufG], [...bufB]);
+        // 1. CHROM фильтр
+        const rawPulse = chromFilter([...bufR], [...bufG], [...bufB]);
 
-        // Сохраняем для графика
-        ppgSignalForChart = pulse.slice(-150);
-
-        // 2. Полосовой фильтр: оставляем только частоты пульса (0.7 - 3.5 Гц = 42 - 210 BPM)
+        // 2. Полосовой фильтр (правильный, через БПФ-подобный подход)
         const fps = estimateFPS();
-        const filtered = bandpassFilter(pulse, 0.7, 3.5, fps);
+        const filtered = butterworthBandpass(rawPulse, 0.75, 3.0, fps);
 
-        // 3. Находим пики (удары сердца)
-        const peaks = findPeaks(filtered, fps);
+        // Для графика — последние 5 секунд
+        ppgSignalForChart = filtered.slice(-Math.round(fps * 5));
 
-        if (peaks.length < 3) return;
+        // 3. Поиск пиков (улучшенный)
+        const peaks = findPeaksImproved(filtered, fps);
 
-        // 4. Считаем BPM
+        const debug = document.getElementById('debugInfo');
+
+        if (peaks.length < 3) {
+            debug.textContent = `Отладка: fps=${fps.toFixed(1)}, пиков=${peaks.length} (мало), буфер=${bufR.length}`;
+            return;
+        }
+
+        // 4. Интервалы между пиками → BPM
         const intervals = [];
         for (let i = 1; i < peaks.length; i++) {
-            intervals.push((peaks[i] - peaks[i - 1]) / fps); // секунды
-        }
-
-        const avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-        const bpm = Math.round(60 / avgInterval);
-
-        // Фильтр правдоподобности
-        if (bpm >= 45 && bpm <= 180) {
-            currentBPM = currentBPM === 0 ? bpm : Math.round(currentBPM * 0.7 + bpm * 0.3);
-        }
-
-        // 5. Считаем HRV (RMSSD)
-        if (intervals.length >= 3) {
-            let sumSqDiff = 0;
-            for (let i = 1; i < intervals.length; i++) {
-                const diff = intervals[i] - intervals[i - 1];
-                sumSqDiff += diff * diff;
+            const dt = (peaks[i] - peaks[i - 1]) / fps; // секунды
+            // Фильтруем нереальные интервалы
+            if (dt > 0.33 && dt < 1.5) { // 40-180 BPM
+                intervals.push(dt);
             }
-            const rmssd = Math.sqrt(sumSqDiff / (intervals.length - 1)) * 1000; // в мс
-            currentHRV = currentHRV === 0 ? Math.round(rmssd) : Math.round(currentHRV * 0.6 + rmssd * 0.4);
         }
 
-        // 6. Считаем стресс (упрощённая формула)
-        // Низкий HRV + высокий пульс = высокий стресс
-        if (currentHRV > 0 && currentBPM > 0) {
-            // RMSSD: <20мс = сильный стресс, >60мс = спокойствие
-            let hrvStress = Math.max(0, Math.min(100, 100 - (currentHRV - 10) * (100 / 60)));
-            // BPM: >100 = стресс, <65 = спокойствие
-            let bpmStress = Math.max(0, Math.min(100, (currentBPM - 60) * (100 / 50)));
+        if (intervals.length < 2) {
+            debug.textContent = `Отладка: пиков=${peaks.length}, валидных интервалов=${intervals.length} (мало)`;
+            return;
+        }
+
+        // Медианный интервал (устойчив к выбросам)
+        const sortedIntervals = [...intervals].sort((a, b) => a - b);
+        const medianInterval = sortedIntervals[Math.floor(sortedIntervals.length / 2)];
+        const bpm = Math.round(60 / medianInterval);
+
+        // Сглаживание BPM
+        if (bpm >= 45 && bpm <= 180) {
+            if (currentBPM === 0) {
+                currentBPM = bpm;
+            } else {
+                // Если разница слишком большая — скорее всего глюк, сглаживаем сильнее
+                const diff = Math.abs(bpm - currentBPM);
+                const smoothing = diff > 20 ? 0.9 : 0.6;
+                currentBPM = Math.round(currentBPM * smoothing + bpm * (1 - smoothing));
+            }
+            bpmHistory.push(currentBPM);
+            if (bpmHistory.length > 60) bpmHistory.shift();
+        }
+
+        // 5. HRV (RMSSD)
+        if (intervals.length >= 3) {
+            // Берём только интервалы близкие к медиане (убираем выбросы)
+            const goodIntervals = intervals.filter(
+                d => Math.abs(d - medianInterval) < medianInterval * 0.3
+            );
+
+            if (goodIntervals.length >= 3) {
+                let sumSqDiff = 0;
+                for (let i = 1; i < goodIntervals.length; i++) {
+                    const diff = goodIntervals[i] - goodIntervals[i - 1];
+                    sumSqDiff += diff * diff;
+                }
+                const rmssd = Math.sqrt(sumSqDiff / (goodIntervals.length - 1)) * 1000;
+
+                if (currentHRV === 0) {
+                    currentHRV = Math.round(rmssd);
+                } else {
+                    currentHRV = Math.round(currentHRV * 0.5 + rmssd * 0.5);
+                }
+            }
+        }
+
+        // 6. Стресс (всегда вычисляем, если есть BPM)
+        if (currentBPM > 0) {
+            let hrvScore, bpmScore;
+
+            if (currentHRV > 0) {
+                // HRV компонент: низкий HRV = высокий стресс
+                // RMSSD 10мс = 100% стресс, 80мс = 0% стресс
+                hrvScore = clamp(100 - ((currentHRV - 10) / 70) * 100, 0, 100);
+            } else {
+                hrvScore = 50; // пока HRV неизвестен — нейтрально
+            }
+
+            // BPM компонент: высокий пульс = стресс
+            // 60 BPM = 0% стресс, 110 BPM = 100% стресс
+            bpmScore = clamp(((currentBPM - 60) / 50) * 100, 0, 100);
+
             // Комбинируем (HRV важнее)
-            currentStress = Math.round(hrvStress * 0.7 + bpmStress * 0.3);
+            const rawStress = Math.round(hrvScore * 0.65 + bpmScore * 0.35);
+
+            if (currentStress < 0) {
+                currentStress = rawStress;
+            } else {
+                currentStress = Math.round(currentStress * 0.7 + rawStress * 0.3);
+            }
         }
 
         // 7. Обновляем UI
         updateUI();
+
+        debug.textContent =
+            `Отладка: fps=${fps.toFixed(1)}, пиков=${peaks.length}, ` +
+            `интервалов=${intervals.length}, медиана=${(medianInterval * 1000).toFixed(0)}мс, ` +
+            `BPM_raw=${bpm}, HRV_raw=${currentHRV}`;
     }
 
     // ============================================================
-    //  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+    //  УЛУЧШЕННЫЙ ПОЛОСОВОЙ ФИЛЬТР
+    //  (каскад из скользящих средних — лучше чем в v1)
     // ============================================================
 
-    function estimateFPS() {
-        if (bufTimestamps.length < 10) return TARGET_FPS;
-        const last = bufTimestamps.slice(-30);
-        const dt = (last[last.length - 1] - last[0]) / (last.length - 1);
-        return 1000 / (dt || 33);
-    }
-
-    // Убираем линейный тренд (дрейф)
-    function detrend(signal) {
-        const n = signal.length;
-        if (n === 0) return signal;
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        for (let i = 0; i < n; i++) {
-            sumX += i;
-            sumY += signal[i];
-            sumXY += i * signal[i];
-            sumXX += i * i;
-        }
-        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-        const intercept = (sumY - slope * sumX) / n;
-        return signal.map((v, i) => v - (slope * i + intercept));
-    }
-
-    // Стандартное отклонение
-    function std(arr) {
-        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-        return Math.sqrt(arr.reduce((sum, v) => sum + (v - mean) ** 2, 0) / arr.length);
-    }
-
-    // Простой полосовой фильтр (Butterworth-подобный, упрощённый)
-    function bandpassFilter(signal, lowFreq, highFreq, fps) {
-        // Используем скользящие средние для грубой фильтрации
+    function butterworthBandpass(signal, lowHz, highHz, fps) {
         const n = signal.length;
         if (n < 10) return signal;
 
-        // Высокочастотный фильтр (убирает медленный дрейф)
-        const highPassWindow = Math.round(fps / lowFreq);
-        let hp = [];
-        for (let i = 0; i < n; i++) {
-            const start = Math.max(0, i - highPassWindow);
-            const end = i + 1;
-            const windowSlice = signal.slice(start, end);
-            const mean = windowSlice.reduce((a, b) => a + b) / windowSlice.length;
-            hp.push(signal[i] - mean);
+        // Высокочастотный фильтр (убирает дыхание и дрейф)
+        // Используем экспоненциальный фильтр вместо скользящего среднего
+        const rc_high = 1.0 / (2.0 * Math.PI * lowHz);
+        const dt = 1.0 / fps;
+        const alpha_high = rc_high / (rc_high + dt);
+
+        let hp = new Array(n);
+        hp[0] = 0;
+        for (let i = 1; i < n; i++) {
+            hp[i] = alpha_high * (hp[i - 1] + signal[i] - signal[i - 1]);
         }
 
         // Низкочастотный фильтр (убирает высокочастотный шум)
-        const lowPassWindow = Math.max(2, Math.round(fps / highFreq / 2));
-        let lp = [];
-        for (let i = 0; i < n; i++) {
-            const start = Math.max(0, i - lowPassWindow);
-            const end = Math.min(n, i + lowPassWindow + 1);
-            const windowSlice = hp.slice(start, end);
-            lp.push(windowSlice.reduce((a, b) => a + b) / windowSlice.length);
+        const rc_low = 1.0 / (2.0 * Math.PI * highHz);
+        const alpha_low = dt / (rc_low + dt);
+
+        let lp = new Array(n);
+        lp[0] = hp[0];
+        for (let i = 1; i < n; i++) {
+            lp[i] = lp[i - 1] + alpha_low * (hp[i] - lp[i - 1]);
         }
 
-        return lp;
+        // Второй проход (каскад) — делает фильтр круче
+        let lp2 = new Array(n);
+        lp2[0] = lp[0];
+        for (let i = 1; i < n; i++) {
+            lp2[i] = lp2[i - 1] + alpha_low * (lp[i] - lp2[i - 1]);
+        }
+
+        return lp2;
     }
 
-    // Поиск пиков в сигнале
-    function findPeaks(signal, fps) {
+    // ============================================================
+    //  УЛУЧШЕННЫЙ ПОИСК ПИКОВ
+    // ============================================================
+
+    function findPeaksImproved(signal, fps) {
+        const n = signal.length;
+        if (n < 20) return [];
+
         const peaks = [];
-        const minDistance = Math.round(fps * 0.35); // минимум 0.35с между ударами (~170 BPM макс)
 
-        // Адаптивный порог
-        const sorted = [...signal].sort((a, b) => a - b);
-        const threshold = sorted[Math.round(sorted.length * 0.6)];
+        // Минимальное расстояние между пиками: 0.33 сек (180 BPM макс)
+        const minDist = Math.round(fps * 0.33);
 
-        for (let i = 2; i < signal.length - 2; i++) {
-            if (signal[i] > threshold &&
-                signal[i] > signal[i - 1] &&
+        // Адаптивный порог: среднее + 0.2 × стандартное отклонение
+        // (ниже чем в v1, чтобы не пропускать слабые пики)
+        const mean = signal.reduce((a, b) => a + b, 0) / n;
+        const stdVal = arrStd(signal);
+        const threshold = mean + stdVal * 0.2;
+
+        for (let i = 3; i < n - 3; i++) {
+            // Пик: текущая точка выше соседей
+            if (signal[i] > signal[i - 1] &&
                 signal[i] > signal[i - 2] &&
                 signal[i] > signal[i + 1] &&
-                signal[i] > signal[i + 2]) {
+                signal[i] > signal[i + 2] &&
+                signal[i] > threshold) {
 
-                // Проверяем минимальную дистанцию
-                if (peaks.length === 0 || (i - peaks[peaks.length - 1]) >= minDistance) {
+                // Проверяем расстояние до предыдущего пика
+                if (peaks.length === 0 || (i - peaks[peaks.length - 1]) >= minDist) {
                     peaks.push(i);
                 }
             }
@@ -620,26 +599,69 @@
     }
 
     // ============================================================
-    //  ОБНОВЛЕНИЕ ИНТЕРФЕЙСА
+    //  ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+    // ============================================================
+
+    function estimateFPS() {
+        if (bufTimestamps.length < 10) return 30;
+        const last = bufTimestamps.slice(-60);
+        const dt = (last[last.length - 1] - last[0]) / (last.length - 1);
+        const fps = 1000 / (dt || 33);
+        return Math.max(10, Math.min(60, fps)); // ограничиваем разумным диапазоном
+    }
+
+    function detrend(signal) {
+        const n = signal.length;
+        if (n < 2) return signal;
+        let sx = 0, sy = 0, sxy = 0, sxx = 0;
+        for (let i = 0; i < n; i++) {
+            sx += i; sy += signal[i];
+            sxy += i * signal[i]; sxx += i * i;
+        }
+        const denom = n * sxx - sx * sx;
+        if (denom === 0) return signal;
+        const slope = (n * sxy - sx * sy) / denom;
+        const intercept = (sy - slope * sx) / n;
+        return signal.map((v, i) => v - (slope * i + intercept));
+    }
+
+    function arrStd(arr) {
+        if (arr.length === 0) return 0;
+        const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+    }
+
+    function clamp(val, min, max) {
+        return Math.max(min, Math.min(max, val));
+    }
+
+    // ============================================================
+    //  UI
     // ============================================================
 
     function updateUI() {
         document.getElementById('bpmValue').textContent =
             currentBPM > 0 ? currentBPM : '—';
+
         document.getElementById('hrvValue').textContent =
             currentHRV > 0 ? currentHRV : '—';
 
-        if (currentStress > 0) {
-            document.getElementById('stressValue').textContent = currentStress + '%';
-            const fill = document.getElementById('stressFill');
-            fill.style.width = currentStress + '%';
+        const stressEl = document.getElementById('stressValue');
+        const fillEl = document.getElementById('stressFill');
+
+        if (currentStress >= 0) {
+            stressEl.textContent = currentStress + '%';
+            fillEl.style.width = currentStress + '%';
 
             if (currentStress < 30) {
-                fill.style.background = 'linear-gradient(90deg, #2ecc71, #27ae60)';
+                fillEl.style.background = 'linear-gradient(90deg, #2ecc71, #27ae60)';
+                stressEl.style.color = '#2ecc71';
             } else if (currentStress < 60) {
-                fill.style.background = 'linear-gradient(90deg, #f1c40f, #f39c12)';
+                fillEl.style.background = 'linear-gradient(90deg, #f1c40f, #f39c12)';
+                stressEl.style.color = '#f39c12';
             } else {
-                fill.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
+                fillEl.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
+                stressEl.style.color = '#e74c3c';
             }
         }
     }
@@ -650,7 +672,7 @@
 
     function drawCharts() {
         drawPPGChart();
-        drawConvergenceChart();
+        drawInfoChart();
         requestAnimationFrame(drawCharts);
     }
 
@@ -662,33 +684,40 @@
         ctx.fillStyle = '#16213e';
         ctx.fillRect(0, 0, w, h);
 
-        if (ppgSignalForChart.length < 5) return;
+        if (ppgSignalForChart.length < 10) return;
 
         const signal = ppgSignalForChart;
         const min = Math.min(...signal);
         const max = Math.max(...signal);
         const range = max - min || 1;
 
-        ctx.strokeStyle = '#e74c3c';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
+        // Сетка
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 0.5;
+        for (let y = 20; y < h; y += 25) {
+            ctx.beginPath();
+            ctx.moveTo(0, y); ctx.lineTo(w, y);
+            ctx.stroke();
+        }
 
+        // Сигнал
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
         for (let i = 0; i < signal.length; i++) {
             const x = (i / signal.length) * w;
             const y = h - ((signal[i] - min) / range) * (h - 20) - 10;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
-
         ctx.stroke();
 
-        // Подпись
-        ctx.fillStyle = '#666';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('rPPG сигнал (CHROM)', 5, 12);
+        ctx.fillStyle = '#555';
+        ctx.font = '10px monospace';
+        ctx.fillText('rPPG CHROM v2', 5, 12);
     }
 
-    function drawConvergenceChart() {
+    function drawInfoChart() {
         const canvas = document.getElementById('convergenceChart');
         const ctx = canvas.getContext('2d');
         const w = canvas.width, h = canvas.height;
@@ -696,38 +725,40 @@
         ctx.fillStyle = '#16213e';
         ctx.fillRect(0, 0, w, h);
 
-        // Показываем уровень заполненности буфера и качество сигнала
-        const progress = Math.min(bufR.length / BUFFER_SIZE, 1);
-        const signalQuality = ppgSignalForChart.length > 10 ?
-            Math.min(std(ppgSignalForChart) * 500, 100) : 0;
+        // История BPM (мини-график)
+        if (bpmHistory.length > 2) {
+            const min = Math.min(...bpmHistory) - 5;
+            const max = Math.max(...bpmHistory) + 5;
+            const range = max - min || 1;
 
-        // Полоса прогресса буфера
-        ctx.fillStyle = '#1a6b3c';
-        ctx.fillRect(10, 20, (w - 20) * progress, 25);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = 0; i < bpmHistory.length; i++) {
+                const x = (i / bpmHistory.length) * w;
+                const y = h - 30 - ((bpmHistory[i] - min) / range) * (h - 50);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            ctx.fillStyle = '#555';
+            ctx.font = '10px monospace';
+            ctx.fillText(`BPM история (${bpmHistory.length} сек)`, 5, 12);
+            ctx.fillText(`мин: ${Math.min(...bpmHistory)}`, 5, h - 8);
+            ctx.fillText(`макс: ${Math.max(...bpmHistory)}`, w - 70, h - 8);
+        }
+
+        // Полоса буфера
+        const progress = bufR.length / BUFFER_SIZE;
+        ctx.fillStyle = '#1a4a2e';
+        ctx.fillRect(5, h - 22, (w - 10) * progress, 8);
         ctx.strokeStyle = '#333';
-        ctx.strokeRect(10, 20, w - 20, 25);
-
-        ctx.fillStyle = '#aaa';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(`Буфер: ${Math.round(progress * 100)}%`, 15, 40);
-
-        // Полоса качества сигнала
-        const qualColor = signalQuality > 30 ? '#2ecc71' : signalQuality > 10 ? '#f39c12' : '#e74c3c';
-        ctx.fillStyle = qualColor;
-        ctx.fillRect(10, 65, (w - 20) * (signalQuality / 100), 25);
-        ctx.strokeStyle = '#333';
-        ctx.strokeRect(10, 65, w - 20, 25);
-
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(`Сигнал: ${signalQuality > 30 ? 'хороший' : signalQuality > 10 ? 'слабый' : 'шум'}`, 15, 85);
-
-        // BPM история
-        ctx.fillStyle = '#666';
-        ctx.fillText(`BPM: ${currentBPM || '...'} | HRV: ${currentHRV || '...'} мс`, 15, 110);
+        ctx.strokeRect(5, h - 22, w - 10, 8);
     }
 
     // ============================================================
-    //  ВСПОМОГАТЕЛЬНЫЕ
+    //  УТИЛИТЫ
     // ============================================================
 
     function setStatus(text, cls) {
